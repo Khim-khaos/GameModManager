@@ -80,7 +80,7 @@ class Browser(QWidget):
         menu = self.web_view.page().createStandardContextMenu()
 
         hit_test_result = self.web_view.page().hitTest(event.pos())
-        if hit_test_result and hit_test_result.linkUrl().isValid():  # Проверка на None и isValid()
+        if hit_test_result and hit_test_result.linkUrl().isValid():
             url = hit_test_result.linkUrl().toString()
             if "/workshop/filedetails/?id=" in url:
                 mod_id = url.split("?id=")[1]
