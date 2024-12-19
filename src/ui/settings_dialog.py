@@ -1,41 +1,37 @@
-# src/ui/settings_dialog.py
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QFileDialog
-from PyQt5.QtCore import QSettings
+from PyQt5.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout, QFileDialog, QMessageBox
+from PyQt5.QtCore import Qt
 
 class SettingsDialog(QDialog):
-    def __init__(self, parent=None, initial_steamcmd_path=""):
+    def __init__(self, parent=None, settings=None):
         super().__init__(parent)
         self.setWindowTitle("Настройки")
-        self.setGeometry(200, 200, 400, 150)
+        self.setModal(True)
+        self.settings = settings if settings else {}
 
-        self.settings = QSettings("GameModManager", "Settings")
-        self.steamcmd_path = self.settings.value("steamcmd_path", initial_steamcmd_path)
+        self.steamcmd_path_label = QLabel("Путь до steamcmd.exe:")
+        self.steamcmd_path_input = QLineEdit(self.settings.get('steamcmd_path', ''))
+        self.steamcmd_path_button = QPushButton("Выбрать")
+        self.steamcmd_path_button.clicked.connect(self.select_steamcmd_path)
 
-        layout = QVBoxLayout(self)
+        self.save_button = QPushButton("Сохранить")
+        self.save_button.clicked.connect(self.accept)
 
-        label = QLabel("Путь до steamcmd:")
-        layout.addWidget(label)
+        self.cancel_button = QPushButton("Отмена")
+        self.cancel_button.clicked.connect(self.reject)
 
-        self.steamcmd_path_edit = QLineEdit(self.steamcmd_path)
-        layout.addWidget(self.steamcmd_path_edit)
+        layout = QVBoxLayout()
+        layout.addWidget(self.steamcmd_path_label)
+        layout.addWidget(self.steamcmd_path_input)
+        layout.addWidget(self.steamcmd_path_button)
+        layout.addWidget(self.save_button)
+        layout.addWidget(self.cancel_button)
 
-        browse_button = QPushButton("Обзор")
-        browse_button.clicked.connect(self.browse_steamcmd)
-        layout.addWidget(browse_button)
+        self.setLayout(layout)
 
-        save_button = QPushButton("Сохранить")
-        save_button.clicked.connect(self.save_settings)
-        layout.addWidget(save_button)
+    def select_steamcmd_path(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите steamcmd.exe")
+        self.steamcmd_path_input.setText(file_path)
 
-    def browse_steamcmd(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите steamcmd.exe", "", "Executable Files (*.exe)")
-        if file_path:
-            self.steamcmd_path_edit.setText(file_path)
-
-    def save_settings(self):
-        self.steamcmd_path = self.steamcmd_path_edit.text()
-        self.settings.setValue("steamcmd_path", self.steamcmd_path)
-        self.accept()
-
-    def get_steamcmd_path(self):
-        return self.steamcmd_path
+    def get_settings(self):
+        steamcmd_path = self.steamcmd_path_input.text()
+        return {'steamcmd_path': steamcmd_path}

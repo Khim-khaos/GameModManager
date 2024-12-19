@@ -1,84 +1,75 @@
-# src/ui/add_game_dialog.py
-from PyQt5.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout, QFormLayout, QFileDialog, QHBoxLayout
-import os
-import traceback
+from PyQt5.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout, QFileDialog, QMessageBox
+from PyQt5.QtCore import Qt
 
 class AddGameDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Добавить игру")
+        self.setModal(True)
+
+        self.game_id_label = QLabel("ID игры (Steam App ID):")
         self.game_id_input = QLineEdit()
+
+        self.game_name_label = QLabel("Название игры:")
         self.game_name_input = QLineEdit()
+
+        self.executable_path_label = QLabel("Путь к исполняемому файлу:")
         self.executable_path_input = QLineEdit()
+        self.executable_path_button = QPushButton("Обзор")
+        self.executable_path_button.clicked.connect(self.browse_executable_path)
+
+        self.mods_path_label = QLabel("Путь к папке с модами:")
         self.mods_path_input = QLineEdit()
-        self.init_ui()
+        self.mods_path_button = QPushButton("Обзор")
+        self.mods_path_button.clicked.connect(self.browse_mods_path)
 
-    def init_ui(self):
-        try:
-            layout = QVBoxLayout(self)
-            form_layout = QFormLayout()
-            form_layout.addRow(QLabel("ID игры:"), self.game_id_input)
-            form_layout.addRow(QLabel("Название игры:"), self.game_name_input)
+        self.steamcmd_path_label = QLabel("Путь к steamcmd:")
+        self.steamcmd_path_input = QLineEdit()
+        self.steamcmd_path_button = QPushButton("Обзор")
+        self.steamcmd_path_button.clicked.connect(self.browse_steamcmd_path)
 
-            # Путь до исполняемого файла
-            executable_layout = QHBoxLayout()
-            executable_layout.addWidget(QLabel("Путь до исполняемого файла:"))
-            executable_layout.addWidget(self.executable_path_input)
-            executable_button = QPushButton("Выбрать")
-            executable_button.clicked.connect(self.select_executable_path)
-            executable_layout.addWidget(executable_button)
-            form_layout.addRow(executable_layout)
+        self.ok_button = QPushButton("OK")
+        self.ok_button.clicked.connect(self.accept)
+        self.cancel_button = QPushButton("Отмена")
+        self.cancel_button.clicked.connect(self.reject)
 
-            # Путь до папки с модами
-            mods_layout = QHBoxLayout()
-            mods_layout.addWidget(QLabel("Путь до папки с модами:"))
-            mods_layout.addWidget(self.mods_path_input)
-            mods_button = QPushButton("Выбрать")
-            mods_button.clicked.connect(self.select_mods_path)
-            mods_layout.addWidget(mods_button)
-            form_layout.addRow(mods_layout)
+        layout = QVBoxLayout()
+        layout.addWidget(self.game_id_label)
+        layout.addWidget(self.game_id_input)
+        layout.addWidget(self.game_name_label)
+        layout.addWidget(self.game_name_input)
+        layout.addWidget(self.executable_path_label)
+        layout.addWidget(self.executable_path_input)
+        layout.addWidget(self.executable_path_button)
+        layout.addWidget(self.mods_path_label)
+        layout.addWidget(self.mods_path_input)
+        layout.addWidget(self.mods_path_button)
+        layout.addWidget(self.steamcmd_path_label)
+        layout.addWidget(self.steamcmd_path_input)
+        layout.addWidget(self.steamcmd_path_button)
+        layout.addWidget(self.ok_button)
+        layout.addWidget(self.cancel_button)
+        self.setLayout(layout)
 
-            layout.addLayout(form_layout)
+    def browse_executable_path(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите исполняемый файл")
+        if file_path:
+            self.executable_path_input.setText(file_path)
 
-            buttons_layout = QVBoxLayout()
-            add_button = QPushButton("Добавить")
-            add_button.clicked.connect(self.accept)
-            cancel_button = QPushButton("Отмена")
-            cancel_button.clicked.connect(self.reject)
-            buttons_layout.addWidget(add_button)
-            buttons_layout.addWidget(cancel_button)
-            layout.addLayout(buttons_layout)
-        except Exception as e:
-            print(f"Ошибка в init_ui: {e}")
-            traceback.print_exc()
+    def browse_mods_path(self):
+        dir_path = QFileDialog.getExistingDirectory(self, "Выберите папку с модами")
+        if dir_path:
+            self.mods_path_input.setText(dir_path)
 
-    def select_executable_path(self):
-        try:
-            file_path, _ = QFileDialog.getOpenFileName(self, "Выбрать исполняемый файл", "", "Executable Files (*.exe *.bat)")
-            if file_path:
-                self.executable_path_input.setText(file_path)
-        except Exception as e:
-            print(f"Ошибка в select_executable_path: {e}")
-            traceback.print_exc()
-
-    def select_mods_path(self):
-        try:
-            dir_path = QFileDialog.getExistingDirectory(self, "Выбрать папку с модами")
-            if dir_path:
-                self.mods_path_input.setText(dir_path)
-        except Exception as e:
-            print(f"Ошибка в select_mods_path: {e}")
-            traceback.print_exc()
+    def browse_steamcmd_path(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите steamcmd.exe")
+        if file_path:
+            self.steamcmd_path_input.setText(file_path)
 
     def get_game_data(self):
-        try:
-            game_id = self.game_id_input.text()
-            game_name = self.game_name_input.text()
-            executable_path = self.executable_path_input.text()
-            mods_path = self.mods_path_input.text()
-            print(f"Данные из AddGameDialog: ID={game_id}, Name={game_name}, Exec={executable_path}, Mods={mods_path}")
-            return game_id, game_name, executable_path, mods_path
-        except Exception as e:
-            print(f"Ошибка в get_game_data: {e}")
-            traceback.print_exc()
-            return None, None, None, None
+        game_id = self.game_id_input.text()
+        game_name = self.game_name_input.text()
+        executable_path = self.executable_path_input.text()
+        mods_path = self.mods_path_input.text()
+        steamcmd_path = self.steamcmd_path_input.text()
+        return game_id, game_name, executable_path, mods_path, steamcmd_path
