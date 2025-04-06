@@ -1,0 +1,19 @@
+[
+    {
+        "name": "ноитаТест",
+        "exe_path": "C:/games/Noita v25.01.2025/noita.exe",
+        "mods_path": "C:/games/Noita v25.01.2025/mods",
+        "app_id": "881100",
+        "mods": []
+    },
+    {
+        "name": "Space Engineers\n",
+        "exe_path": "C:/games/space/noita.exe",
+        "mods_path": "C:/games/space/mods",
+        "app_id": "244850",
+        "mods": [
+            "3351055036",
+            "3367704014"
+        ]
+    }
+]

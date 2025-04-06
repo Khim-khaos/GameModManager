@@ -1,0 +1,11 @@
+{
+    "title": "Менеджер модов для игр",
+    "tab_games": "Игры",
+    "tab_browser": "Браузер",
+    "tab_console": "Консоль",
+    "add_game": "Добавить игру",
+    "settings": "Настройки",
+    "select_steamcmd": "Выбрать путь к SteamCMD",
+    "language": "Язык",
+    "theme": "Тема"
+}

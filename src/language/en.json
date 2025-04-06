@@ -1,0 +1,11 @@
+{
+    "title": "Game Mod Manager",
+    "tab_games": "Games",
+    "tab_browser": "Browser",
+    "tab_console": "Console",
+    "add_game": "Add Game",
+    "settings": "Settings",
+    "select_steamcmd": "Select SteamCMD Path",
+    "language": "Language",
+    "theme": "Theme"
+}
