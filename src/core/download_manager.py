@@ -1,9 +1,10 @@
 import threading
 from loguru import logger
+from core.mod_manager import ModManager
 
 class DownloadManager:
-    def __init__(self, mod_manager, complete_callback, progress_callback):  # Изменен параметр
-        self.mod_manager = mod_manager  # Используем переданный ModManager
+    def __init__(self, steamcmd_path, complete_callback, progress_callback):
+        self.mod_manager = ModManager(steamcmd_path)
         self.complete_callback = complete_callback
         self.progress_callback = progress_callback
         self.is_running = False

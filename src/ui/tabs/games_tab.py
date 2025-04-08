@@ -3,6 +3,8 @@ from core.game_manager import GameManager
 from ui.dialogs.add_game_dialog import AddGameDialog
 from ui.dialogs.edit_game_dialog import EditGameDialog
 from loguru import logger
+import requests
+from bs4 import BeautifulSoup
 
 class GamesTab(QWidget):
     def __init__(self, parent):
@@ -15,12 +17,10 @@ class GamesTab(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # Список игр
         self.game_list = QListWidget()
         self.update_game_list()
         layout.addWidget(self.game_list)
 
-        # Информация об игре
         self.info_label = QLabel("Информация об игре: выберите игру")
         layout.addWidget(self.info_label)
         self.path_label = QLabel("Путь к исполняемому файлу: -")
@@ -32,7 +32,6 @@ class GamesTab(QWidget):
         self.mods_list = QListWidget()
         layout.addWidget(self.mods_list)
 
-        # Кнопки
         button_layout = QHBoxLayout()
         self.add_button = QPushButton(self.parent.tr("add_game"))
         self.add_button.clicked.connect(self.add_game)
@@ -68,6 +67,18 @@ class GamesTab(QWidget):
         self.mods_label.setText("Установленные моды:")
         self.update_game_info()
 
+    def get_mod_name(self, mod_id):
+        """Получаем название мода из Steam Workshop."""
+        url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={mod_id}"
+        try:
+            response = requests.get(url, timeout=5)
+            soup = BeautifulSoup(response.text, "html.parser")
+            title = soup.find("div", class_="workshopItemTitle")
+            return title.text.strip() if title else f"Мод {mod_id}"
+        except Exception as e:
+            logger.error(f"Ошибка при получении названия мода {mod_id}: {e}")
+            return f"Мод {mod_id}"
+
     def update_game_info(self):
         if self.selected_game:
             game = self.game_manager.get_game(self.selected_game)
@@ -77,7 +88,8 @@ class GamesTab(QWidget):
                 self.mods_path_label.setText(f"Путь к папке модов: {game['mods_path']}")
                 self.mods_list.clear()
                 for mod_id in game['mods']:
-                    self.mods_list.addItem(f"Мод {mod_id}")
+                    mod_name = self.get_mod_name(mod_id)
+                    self.mods_list.addItem(f"{mod_name}-{mod_id}")
             else:
                 self.clear_game_info()
         else:
@@ -91,7 +103,7 @@ class GamesTab(QWidget):
 
     def on_game_selected(self, item):
         try:
-            self.selected_game = item.text().split("ID: ")[1].split(" -")[0]
+            self.selected_game = item.text().split("ID: ")[1].split(")")[0].strip()
             self.update_game_info()
         except IndexError:
             logger.error("Ошибка при выборе игры: неверный формат строки")
@@ -99,7 +111,7 @@ class GamesTab(QWidget):
             self.clear_game_info()
 
     def add_game(self):
-        dialog = AddGameDialog(self.parent)  # Исправлено: убрано WELCOME
+        dialog = AddGameDialog(self.parent)
         if dialog.exec():
             name, exe_path, mods_path, app_id = dialog.get_data()
             if not all([name, exe_path, mods_path, app_id]):

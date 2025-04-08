@@ -49,12 +49,12 @@ class MainWindow(QMainWindow):
         self.game_selector.currentTextChanged.connect(self.on_game_selected_combo)
         main_layout.addWidget(self.game_selector)
 
-        # Создание вкладок
+        # Создание вкладок (сначала BrowserTab, затем GamesTab)
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
 
-        self.games_tab = GamesTab(self)
-        self.browser_tab = BrowserTab(self, self.mod_manager)
+        self.browser_tab = BrowserTab(self, self.mod_manager)  # Сначала создаём BrowserTab
+        self.games_tab = GamesTab(self)  # Затем GamesTab
         self.console_tab = ConsoleTab(self)
 
         self.tabs.addTab(self.games_tab, self.tr("tab_games"))
@@ -141,7 +141,7 @@ class MainWindow(QMainWindow):
             self.game_selector.addItem(f"{game['name']} (ID: {game['app_id']})")
 
     def on_game_selected_combo(self, text):
-        if text and text != "Выберите игру":  # Добавлена проверка на пустую строку
+        if text and text != "Выберите игру":
             try:
                 app_id = text.split("ID: ")[1].split(")")[0].strip()
                 logger.debug(f"Выбран app_id из комбо: {app_id}")
@@ -153,10 +153,9 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Ошибка", "Не удалось выбрать игру из выпадающего списка!")
 
     def on_game_selected_list(self, item):
-        if item:  # Проверка на None
+        if item:
             text = item.text()
             try:
-                # Формат строки: "Имя (ID: <app_id>) - Модов: <число>"
                 app_id = text.split("ID: ")[1].split(")")[0].strip()
                 logger.debug(f"Выбран app_id из списка: {app_id}")
                 self.browser_tab.set_game(app_id)
