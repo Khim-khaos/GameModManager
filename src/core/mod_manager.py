@@ -58,3 +58,4 @@ class ModManager:
     def get_installed_mods(self, app_id):
         game = self.game_manager.get_game(app_id)
         return game["mods"] if game and "mods" in game else []
+

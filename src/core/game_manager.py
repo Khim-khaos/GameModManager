@@ -49,3 +49,5 @@ class GameManager:
 
     def get_game(self, app_id):
         return next((game for game in self.games if game["app_id"] == app_id), None)
+
+

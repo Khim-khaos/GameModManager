@@ -189,3 +189,4 @@ class MainWindow(QMainWindow):
                 self.progress_bar.setRange(0, 0)
         else:
             self.progress_bar.setRange(0, 0)
+

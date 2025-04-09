@@ -61,3 +61,4 @@ class AddGameDialog(QDialog):
             self.mods_input.text(),
             self.app_id_input.text()
         )
+

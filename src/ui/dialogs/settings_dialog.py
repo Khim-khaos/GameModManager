@@ -82,3 +82,4 @@ class SettingsDialog(QDialog):
         self.config.set("background_image", self.background_input.text())
         self.config.set("opacity", self.opacity_slider.value() / 100)
         self.accept()
+

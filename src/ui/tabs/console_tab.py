@@ -31,3 +31,4 @@ class ConsoleTab(QWidget):
     def clear_console(self):
         self.console_output.clear()
         logger.info("Консоль очищена")
+

@@ -79,3 +79,4 @@ class EditGameDialog(QDialog):
         self.game_manager.save_games()
         logger.info(f"Игра {self.app_id} отредактирована: {new_name}")
         self.accept()
+

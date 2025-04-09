@@ -143,3 +143,4 @@ class GamesTab(QWidget):
         self.selected_game = None
         self.parent.update_game_selector()
         logger.info(f"Игра с ID {app_id} удалена")
+

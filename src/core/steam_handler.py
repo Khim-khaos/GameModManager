@@ -75,3 +75,4 @@ class SteamHandler:
             logger.info(f"Информация о несохранённом моде {mod_id} записана в failed_downloads.txt")
         except Exception as e:
             logger.error(f"Ошибка при записи информации о несохранённом моде {mod_id}: {e}")
+

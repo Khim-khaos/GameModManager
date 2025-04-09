@@ -150,12 +150,16 @@ class BrowserTab(QWidget):
         url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={mod_id}"
         try:
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-            response = requests.get(url, timeout=5, headers=headers)
+            response = requests.get(url, timeout=10, headers=headers)
+            response.raise_for_status()  # Проверяем HTTP-ошибки
             soup = BeautifulSoup(response.text, "html.parser")
             title = soup.find("div", class_="workshopItemTitle")
             name = title.text.strip() if title else f"Мод {mod_id}"
             self.mod_names_cache[mod_id] = name
             return name
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Сетевая ошибка при получении названия мода {mod_id}: {e}")
+            return f"Мод {mod_id}"
         except Exception as e:
             logger.error(f"Ошибка при получении названия мода {mod_id}: {e}")
             return f"Мод {mod_id}"
@@ -214,12 +218,16 @@ class BrowserTab(QWidget):
         failed_mods = []
         for app_id, mod_id in self.mod_manager.download_queue[:]:  # Копируем очередь
             mod_name = self.get_mod_name(mod_id)
-            success = self.parent.download_manager.steam_handler.download_mod(app_id, mod_id)
-            if success:
-                self.mod_manager.download_queue.remove((app_id, mod_id))
-                self.update_queue()
-                QMessageBox.information(self, "Успех", f"Мод {mod_name}-{mod_id} успешно скачан!")
-            else:
+            try:
+                success = self.parent.download_manager.download_mod(app_id, mod_id)
+                if success:
+                    self.mod_manager.download_queue.remove((app_id, mod_id))
+                    self.update_queue()
+                    QMessageBox.information(self, "Успех", f"Мод {mod_name}-{mod_id} успешно скачан!")
+                else:
+                    failed_mods.append(f"{mod_name}-{mod_id}")
+            except Exception as e:
+                logger.error(f"Ошибка при скачивании мода {mod_id} для игры {app_id}: {e}")
                 failed_mods.append(f"{mod_name}-{mod_id}")
         if failed_mods:
             QMessageBox.warning(self, "Ошибка", f"Не удалось скачать следующие моды:\n{', '.join(failed_mods)}\nПодробности в failed_downloads.txt")
@@ -252,3 +260,4 @@ class BrowserTab(QWidget):
         self.mod_manager.download_queue.clear()
         self.update_queue()
         logger.info("Очередь загрузки очищена")
+

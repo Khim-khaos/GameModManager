@@ -91,3 +91,4 @@ def parse_dependencies(mod_id):
     except Exception as e:
         logger.error(f"Ошибка при парсинге зависимостей мода {mod_id}: {e}")
         return []
+

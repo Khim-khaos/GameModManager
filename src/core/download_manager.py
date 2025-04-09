@@ -1,41 +1,48 @@
-import threading
 from loguru import logger
-from core.mod_manager import ModManager
+import requests
+from bs4 import BeautifulSoup
+import os
 
 class DownloadManager:
-    def __init__(self, steamcmd_path, complete_callback, progress_callback):
-        self.mod_manager = ModManager(steamcmd_path)
-        self.complete_callback = complete_callback
-        self.progress_callback = progress_callback
-        self.is_running = False
-        self.thread = None
+    def __init__(self, steam_handler):
+        self.steam_handler = steam_handler
 
     def start(self):
-        if not self.is_running:
-            if not self.mod_manager.download_queue:
-                logger.warning("Очередь загрузки пуста, загрузка не начата")
-                return
-            self.is_running = True
-            self.thread = threading.Thread(target=self.download_loop, daemon=True)
-            self.thread.start()
-            logger.info("Менеджер загрузок запущен")
-        else:
-            logger.warning("Менеджер загрузок уже запущен")
+        """Запускает процесс скачивания модов (вызывается из UI)."""
+        logger.info("Запущен процесс скачивания модов")
+        # В текущей реализации UI (browser_tab.py) вызывает download_mod напрямую,
+        # поэтому этот метод может быть использован для других сценариев в будущем.
+        # Пока он просто логирует начало процесса.
 
-    def stop(self):
-        self.is_running = False
-        if self.thread:
-            self.thread.join()
-        logger.info("Менеджер загрузок остановлен")
+    def download_mod(self, app_id, mod_id):
+        """Скачивает мод через SteamHandler и возвращает результат."""
+        try:
+            success = self.steam_handler.download_mod(app_id, mod_id)
+            if not success:
+                logger.error(f"Не удалось скачать мод {mod_id} для игры {app_id}")
+                self.log_failed_download(app_id, mod_id)
+            return success
+        except Exception as e:
+            logger.error(f"Ошибка в DownloadManager для мода {mod_id} игры {app_id}: {e}")
+            self.log_failed_download(app_id, mod_id)
+            return False
 
-    def download_loop(self):
-        while self.is_running and self.mod_manager.download_queue:
-            logger.info(f"Начинается загрузка следующего мода из очереди: {self.mod_manager.download_queue[0]}")
-            success = self.mod_manager.download_next(self.progress_callback)
-            self.complete_callback(success)
-            if success:
-                logger.info("Мод успешно загружен")
-            else:
-                logger.error("Ошибка при загрузке мода")
-        self.is_running = False
-        logger.info("Все моды из очереди загружены или процесс остановлен")
+    def log_failed_download(self, app_id, mod_id):
+        """Сохраняет информацию о несохранённом моде в файл."""
+        try:
+            # Получаем название мода
+            url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={mod_id}"
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+            response = requests.get(url, timeout=10, headers=headers)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+            title = soup.find("div", class_="workshopItemTitle")
+            mod_name = title.text.strip() if title else f"Мод {mod_id}"
+
+            # Записываем в файл
+            with open("failed_downloads.txt", "a", encoding="utf-8") as f:
+                f.write(f"Название: {mod_name}\nID: {mod_id}\nСсылка: {url}\nИгра: {app_id}\n\n")
+            logger.info(f"Информация о несохранённом моде {mod_id} записана в failed_downloads.txt")
+        except Exception as e:
+            logger.error(f"Ошибка при записи информации о несохранённом моде {mod_id}: {e}")
+
