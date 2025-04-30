@@ -1,64 +1,67 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QPushButton, QLabel, QFileDialog, QHBoxLayout
+from PySide6.QtWidgets import QDialog, QFormLayout, QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox
+from qtawesome import icon
+
 
 class AddGameDialog(QDialog):
-    def __init__(self, parent):
+    """Диалог для добавления новой игры."""
+
+    def __init__(self, game_manager, language_manager, parent=None):
         super().__init__(parent)
-        self.parent = parent
-        self.setWindowTitle("Добавить игру")
-        self.init_ui()
+        self.setWindowTitle(language_manager.get("add_game", "Добавить игру"))
+        self.game_manager = game_manager
+        self.language_manager = language_manager
+        self.layout = QFormLayout(self)
 
-    def init_ui(self):
-        layout = QVBoxLayout()
-
+        self.name_label = QLabel(language_manager.get("game_name", "Название игры:"))
         self.name_input = QLineEdit()
-        layout.addWidget(QLabel("Название игры:"))
-        layout.addWidget(self.name_input)
+        self.layout.addRow(self.name_label, self.name_input)
 
-        # Путь к исполняемому файлу
-        exe_layout = QHBoxLayout()
-        self.exe_input = QLineEdit()
-        exe_browse = QPushButton("Обзор")
-        exe_browse.clicked.connect(self.browse_exe)
-        exe_layout.addWidget(self.exe_input)
-        exe_layout.addWidget(exe_browse)
-        layout.addWidget(QLabel("Путь к исполняемому файлу:"))
-        layout.addLayout(exe_layout)
-
-        # Путь к папке модов
-        mods_layout = QHBoxLayout()
-        self.mods_input = QLineEdit()
-        mods_browse = QPushButton("Обзор")
-        mods_browse.clicked.connect(self.browse_mods)
-        mods_layout.addWidget(self.mods_input)
-        mods_layout.addWidget(mods_browse)
-        layout.addWidget(QLabel("Путь к папке модов:"))
-        layout.addLayout(mods_layout)
-
+        self.app_id_label = QLabel(language_manager.get("app_id", "App ID:"))
         self.app_id_input = QLineEdit()
-        layout.addWidget(QLabel("ID приложения Steam:"))
-        layout.addWidget(self.app_id_input)
+        self.layout.addRow(self.app_id_label, self.app_id_input)
 
-        ok_button = QPushButton("OK")
-        ok_button.clicked.connect(self.accept)
-        layout.addWidget(ok_button)
+        self.exe_path_label = QLabel(language_manager.get("exe_path", "Путь к .exe:"))
+        self.exe_path_input = QLineEdit()
+        self.exe_browse = QPushButton(icon("fa5.folder-open"), language_manager.get("browse", "Обзор"))
+        self.exe_browse.clicked.connect(self.browse_exe)
+        self.layout.addRow(self.exe_path_label, self.exe_path_input)
+        self.layout.addRow("", self.exe_browse)
 
-        self.setLayout(layout)
+        self.mods_path_label = QLabel(language_manager.get("mods_path", "Путь к папке модов:"))
+        self.mods_path_input = QLineEdit()
+        self.mods_browse = QPushButton(icon("fa5.folder-open"), language_manager.get("browse", "Обзор"))
+        self.mods_browse.clicked.connect(self.browse_mods)
+        self.layout.addRow(self.mods_path_label, self.mods_path_input)
+        self.layout.addRow("", self.mods_browse)
+
+        self.save_button = QPushButton(icon("fa5.save"), language_manager.get("save", "Сохранить"))
+        self.save_button.clicked.connect(self.save_game)
+        self.layout.addRow("", self.save_button)
 
     def browse_exe(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Выбрать исполняемый файл", "", "Исполняемые файлы (*.exe)")
+        """Открывает диалог для выбора исполняемого файла игры."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, self.language_manager.get("select_exe", "Выберите .exe игры"), "", "Executables (*.exe)"
+        )
         if path:
-            self.exe_input.setText(path)
+            self.exe_path_input.setText(path)
 
     def browse_mods(self):
-        path = QFileDialog.getExistingDirectory(self, "Выбрать папку модов")
+        """Открывает диалог для выбора папки модов."""
+        path = QFileDialog.getExistingDirectory(self,
+                                                self.language_manager.get("select_mods_folder", "Выберите папку модов"))
         if path:
-            self.mods_input.setText(path)
+            self.mods_path_input.setText(path)
 
-    def get_data(self):
-        return (
-            self.name_input.text(),
-            self.exe_input.text(),
-            self.mods_input.text(),
-            self.app_id_input.text()
-        )
-
+    def save_game(self):
+        """Сохраняет информацию о новой игре."""
+        name = self.name_input.text()
+        app_id = self.app_id_input.text()
+        exe_path = self.exe_path_input.text()
+        mods_path = self.mods_path_input.text()
+        if name and app_id and exe_path and mods_path:
+            self.game_manager.add_game(name, app_id, exe_path, mods_path)
+            self.accept()
+        else:
+            QMessageBox.warning(self, self.language_manager.get("error", "Ошибка"),
+                                self.language_manager.get("fill_all_fields", "Заполните все поля"))

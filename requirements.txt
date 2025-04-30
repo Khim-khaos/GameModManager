@@ -2,7 +2,6 @@ requests
 packaging
 platformdirs
 beautifulsoup4
-PyQtGraph
 Pillow
 QtAwesome
 psutil
@@ -11,11 +10,13 @@ PySide6
 tqdm
 plyer
 jsonschema
-appdirs
 PyQtWebEngine
 pyinstaller
 loguru
 rich
-qasync
 pyyaml
 pywin32
+watchdog
+aiohttp
+qdarkstyle
+python-i18n

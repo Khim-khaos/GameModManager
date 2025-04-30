@@ -1,82 +1,68 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QPushButton, QLabel, QMessageBox, QFileDialog, QHBoxLayout
-from core.game_manager import GameManager
-from loguru import logger
+from PySide6.QtWidgets import QDialog, QFormLayout, QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox
+from qtawesome import icon
+
 
 class EditGameDialog(QDialog):
-    def __init__(self, parent, app_id):
+    """Диалог для редактирования информации об игре."""
+
+    def __init__(self, game, game_manager, language_manager, parent=None):
         super().__init__(parent)
-        self.parent = parent
-        self.app_id = app_id
-        self.game_manager = GameManager()
-        self.game = self.game_manager.get_game(app_id)  # Исправлено: self.game_manager вместо self heaven_manager
-        if not self.game:
-            QMessageBox.critical(self, "Ошибка", "Игра не найдена!")
-            self.reject()
-            return
-        self.setWindowTitle(f"Редактировать игру: {self.game['name']}")
-        self.init_ui()
+        self.setWindowTitle(language_manager.get("edit_game", "Редактировать игру"))
+        self.game = game
+        self.game_manager = game_manager
+        self.language_manager = language_manager
+        self.layout = QFormLayout(self)
 
-    def init_ui(self):
-        layout = QVBoxLayout()
+        self.name_label = QLabel(language_manager.get("game_name", "Название игры:"))
+        self.name_input = QLineEdit(game.name)
+        self.layout.addRow(self.name_label, self.name_input)
 
-        self.name_input = QLineEdit(self.game["name"])
-        layout.addWidget(QLabel("Название игры:"))
-        layout.addWidget(self.name_input)
+        self.app_id_label = QLabel(language_manager.get("app_id", "App ID:"))
+        self.app_id_input = QLineEdit(game.app_id)
+        self.layout.addRow(self.app_id_label, self.app_id_input)
 
-        # Путь к исполняемому файлу
-        exe_layout = QHBoxLayout()
-        self.exe_input = QLineEdit(self.game["exe_path"])
-        exe_browse = QPushButton("Обзор")
-        exe_browse.clicked.connect(self.browse_exe)
-        exe_layout.addWidget(self.exe_input)
-        exe_layout.addWidget(exe_browse)
-        layout.addWidget(QLabel("Путь к исполняемому файлу:"))
-        layout.addLayout(exe_layout)
+        self.exe_path_label = QLabel(language_manager.get("exe_path", "Путь к .exe:"))
+        self.exe_path_input = QLineEdit(game.exe_path)
+        self.exe_browse = QPushButton(icon("fa5.folder-open"), language_manager.get("browse", "Обзор"))
+        self.exe_browse.clicked.connect(self.browse_exe)
+        self.layout.addRow(self.exe_path_label, self.exe_path_input)
+        self.layout.addRow("", self.exe_browse)
 
-        # Путь к папке модов
-        mods_layout = QHBoxLayout()
-        self.mods_input = QLineEdit(self.game["mods_path"])
-        mods_browse = QPushButton("Обзор")
-        mods_browse.clicked.connect(self.browse_mods)
-        mods_layout.addWidget(self.mods_input)
-        mods_layout.addWidget(mods_browse)
-        layout.addWidget(QLabel("Путь к папке модов:"))
-        layout.addLayout(mods_layout)
+        self.mods_path_label = QLabel(language_manager.get("mods_path", "Путь к папке модов:"))
+        self.mods_path_input = QLineEdit(game.mods_path)
+        self.mods_browse = QPushButton(icon("fa5.folder-open"), language_manager.get("browse", "Обзор"))
+        self.mods_browse.clicked.connect(self.browse_mods)
+        self.layout.addRow(self.mods_path_label, self.mods_path_input)
+        self.layout.addRow("", self.mods_browse)
 
-        self.app_id_input = QLineEdit(self.game["app_id"])
-        self.app_id_input.setReadOnly(True)
-        layout.addWidget(QLabel("ID приложения Steam:"))
-        layout.addWidget(self.app_id_input)
-
-        save_button = QPushButton("Сохранить")
-        save_button.clicked.connect(self.save_changes)
-        layout.addWidget(save_button)
-
-        self.setLayout(layout)
+        self.save_button = QPushButton(icon("fa5.save"), language_manager.get("save", "Сохранить"))
+        self.save_button.clicked.connect(self.save_game)
+        self.layout.addRow("", self.save_button)
 
     def browse_exe(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Выбрать исполняемый файл", "", "Исполняемые файлы (*.exe)")
+        """Открывает диалог для выбора исполняемого файла игры."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, self.language_manager.get("select_exe", "Выберите .exe игры"), "", "Executables (*.exe)"
+        )
         if path:
-            self.exe_input.setText(path)
+            self.exe_path_input.setText(path)
 
     def browse_mods(self):
-        path = QFileDialog.getExistingDirectory(self, "Выбрать папку модов")
+        """Открывает диалог для выбора папки модов."""
+        path = QFileDialog.getExistingDirectory(self,
+                                                self.language_manager.get("select_mods_folder", "Выберите папку модов"))
         if path:
-            self.mods_input.setText(path)
+            self.mods_path_input.setText(path)
 
-    def save_changes(self):
-        new_name = self.name_input.text()
-        new_exe_path = self.exe_input.text()
-        new_mods_path = self.mods_input.text()
-
-        if not all([new_name, new_exe_path, new_mods_path]):
-            QMessageBox.warning(self, "Ошибка", "Все поля должны быть заполнены!")
-            return
-
-        self.game["name"] = new_name
-        self.game["exe_path"] = new_exe_path
-        self.game["mods_path"] = new_mods_path
-        self.game_manager.save_games()
-        logger.info(f"Игра {self.app_id} отредактирована: {new_name}")
-        self.accept()
-
+    def save_game(self):
+        """Сохраняет отредактированную информацию об игре."""
+        self.game.name = self.name_input.text()
+        self.game.app_id = self.app_id_input.text()
+        self.game.exe_path = self.exe_path_input.text()
+        self.game.mods_path = self.mods_path_input.text()
+        if self.game.name and self.game.app_id and self.game.exe_path and self.game.mods_path:
+            self.game_manager.save_games()
+            self.accept()
+        else:
+            QMessageBox.warning(self, self.language_manager.get("error", "Ошибка"),
+                                self.language_manager.get("fill_all_fields", "Заполните все поля"))

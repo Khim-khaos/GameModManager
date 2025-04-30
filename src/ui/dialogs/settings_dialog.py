@@ -1,104 +1,110 @@
-import os
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QPushButton, QLabel, QComboBox, QFileDialog, QSlider, QMessageBox
-from PySide6.QtCore import Qt, Signal  # Добавляем импорт Signal
-from data.config import Config
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton, QFileDialog, QSlider, \
+    QMessageBox
+from PySide6.QtCore import Qt
+from qtawesome import icon
+from loguru import logger
+
 
 class SettingsDialog(QDialog):
-    settings_changed = Signal()  # Создаём сигнал для уведомления о изменении настроек
+    """Диалог для редактирования настроек приложения."""
 
-    def __init__(self, parent):
+    def __init__(self, settings_manager, language_manager, parent=None):
         super().__init__(parent)
-        self.parent = parent
-        self.config = Config()
-        self.languages = self.config.get_available_languages()
-        self.init_ui()
+        self.settings_manager = settings_manager
+        self.language_manager = language_manager
+        self.setWindowTitle(self.language_manager.get("settings", "Настройки"))
+        self.layout = QVBoxLayout(self)
 
-    def init_ui(self):
-        layout = QVBoxLayout()
+        # Путь до SteamCMD
+        self.steamcmd_label = QLabel(self.language_manager.get("steamcmd_path", "Путь до steamcmd.exe:"))
+        self.layout.addWidget(self.steamcmd_label)
+        self.steamcmd_path = QLineEdit(self.settings_manager.settings.get("steamcmd_path", ""))
+        self.steamcmd_browse = QPushButton(
+            icon("fa5.folder-open"), self.language_manager.get("browse", "Обзор")
+        )
+        self.steamcmd_browse.clicked.connect(self.browse_steamcmd)
+        self.layout.addWidget(self.steamcmd_path)
+        self.layout.addWidget(self.steamcmd_browse)
 
-        # Путь к SteamCMD
-        layout.addWidget(QLabel(self.parent.tr("select_steamcmd")))
-        self.steamcmd_input = QLineEdit(self.config.get("steamcmd_path"))
-        browse_button = QPushButton("Обзор")
-        browse_button.clicked.connect(self.browse_steamcmd)
-        layout.addWidget(self.steamcmd_input)
-        layout.addWidget(browse_button)
-
-        # Выбор языка
-        layout.addWidget(QLabel(self.parent.tr("language")))
+        # Язык
+        self.language_label = QLabel(self.language_manager.get("language", "Язык:"))
+        self.layout.addWidget(self.language_label)
         self.language_combo = QComboBox()
-        self.language_map = {}
-        for lang_file, lang_name in self.languages:
-            self.language_combo.addItem(lang_name)
-            self.language_map[lang_name] = lang_file
-        current_language = self.config.get("language")
-        for lang_file, lang_name in self.languages:
-            if lang_file == current_language:
-                self.language_combo.setCurrentText(lang_name)
-                break
-        layout.addWidget(self.language_combo)
+        self.language_combo.addItems(["rus", "en"])
+        self.language_combo.setCurrentText(self.settings_manager.settings.get("language", "rus"))
+        self.layout.addWidget(self.language_combo)
 
-        # Выбор темы
-        layout.addWidget(QLabel(self.parent.tr("theme")))
+        # Тема
+        self.theme_label = QLabel(self.language_manager.get("theme", "Тема интерфейса:"))
+        self.layout.addWidget(self.theme_label)
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["light", "dark"])
-        self.theme_combo.setCurrentText(self.config.get("theme"))
-        layout.addWidget(self.theme_combo)
+        self.theme_combo.setCurrentText(self.settings_manager.settings.get("theme", "light"))
+        self.layout.addWidget(self.theme_combo)
 
-        # Выбор заднего фона
-        layout.addWidget(QLabel("Задний фон:"))
-        self.background_input = QLineEdit(self.config.get("background_image") or "")
-        background_browse = QPushButton("Обзор")
-        background_browse.clicked.connect(self.browse_background)
-        layout.addWidget(self.background_input)
-        layout.addWidget(background_browse)
+        # Фон
+        self.background_label = QLabel(self.language_manager.get("background", "Фоновое изображение:"))
+        self.layout.addWidget(self.background_label)
+        self.background_path = QLineEdit(self.settings_manager.settings.get("background", ""))
+        self.background_browse = QPushButton(
+            icon("fa5.image"), self.language_manager.get("browse", "Обзор")
+        )
+        self.background_browse.clicked.connect(self.browse_background)
+        self.layout.addWidget(self.background_path)
+        self.layout.addWidget(self.background_browse)
 
         # Прозрачность
-        layout.addWidget(QLabel("Прозрачность (0.1 - 1.0):"))
+        self.opacity_label = QLabel(self.language_manager.get("opacity", "Прозрачность интерфейса:"))
+        self.layout.addWidget(self.opacity_label)
         self.opacity_slider = QSlider(Qt.Horizontal)
-        self.opacity_slider.setMinimum(10)
-        self.opacity_slider.setMaximum(100)
-        self.opacity_slider.setValue(int(float(self.config.get("opacity", 1.0)) * 100))
-        self.opacity_slider.setTickInterval(10)
-        self.opacity_slider.setTickPosition(QSlider.TicksBelow)
-        self.opacity_value_label = QLabel(f"{self.opacity_slider.value() / 100:.1f}")
-        self.opacity_slider.valueChanged.connect(self.update_opacity_label)
-        layout.addWidget(self.opacity_slider)
-        layout.addWidget(self.opacity_value_label)
+        self.opacity_slider.setRange(50, 100)
+        self.opacity_slider.setValue(int(self.settings_manager.settings.get("opacity", 1.0) * 100))
+        self.layout.addWidget(self.opacity_slider)
 
-        # Кнопка сохранения
-        save_button = QPushButton("Сохранить")
-        save_button.clicked.connect(self.save_settings)
-        layout.addWidget(save_button)
+        # Размер шрифта
+        self.font_size_label = QLabel(self.language_manager.get("font_size", "Размер шрифта:"))
+        self.layout.addWidget(self.font_size_label)
+        self.font_size_input = QLineEdit(str(self.settings_manager.settings.get("font_size", 12)))
+        self.layout.addWidget(self.font_size_input)
 
-        self.setLayout(layout)
+        # Кнопки
+        self.save_button = QPushButton(
+            icon("fa5.save"), self.language_manager.get("save", "Сохранить")
+        )
+        self.save_button.clicked.connect(self.save_settings)
+        self.layout.addWidget(self.save_button)
 
     def browse_steamcmd(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Выбрать SteamCMD", "", "Исполняемые файлы (*.exe)")
+        """Открывает диалог для выбора steamcmd.exe."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, self.language_manager.get("select_steamcmd", "Выберите steamcmd.exe"), "", "Executables (*.exe)"
+        )
         if path:
-            self.steamcmd_input.setText(path)
+            self.steamcmd_path.setText(path)
 
     def browse_background(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Выбрать изображение фона", "", "Изображения (*.png *.jpg *.jpeg *.bmp)")
+        """Открывает диалог для выбора фонового изображения."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, self.language_manager.get("select_background", "Выберите фоновое изображение"), "",
+            "Images (*.png *.jpg *.jpeg)"
+        )
         if path:
-            self.background_input.setText(path)
-
-    def update_opacity_label(self, value):
-        self.opacity_value_label.setText(f"{value / 100:.1f}")
+            self.background_path.setText(path)
 
     def save_settings(self):
-        steamcmd_path = self.steamcmd_input.text()
-        if not steamcmd_path or not os.path.exists(steamcmd_path):
-            QMessageBox.warning(self, "Ошибка", "Пожалуйста, укажите корректный путь к SteamCMD (steamcmd.exe).")
-            return
-
-        selected_language_name = self.language_combo.currentText()
-        selected_language_file = self.language_map.get(selected_language_name, "rus")
-
-        self.config.set("steamcmd_path", steamcmd_path)
-        self.config.set("language", selected_language_file)
-        self.config.set("theme", self.theme_combo.currentText())
-        self.config.set("background_image", self.background_input.text())
-        self.config.set("opacity", self.opacity_slider.value() / 100)
-        self.settings_changed.emit()  # Отправляем сигнал
-        self.accept()
+        """Сохраняет настройки."""
+        try:
+            self.settings_manager.settings.update({
+                "steamcmd_path": self.steamcmd_path.text(),
+                "language": self.language_combo.currentText(),
+                "theme": self.theme_combo.currentText(),
+                "background": self.background_path.text(),
+                "opacity": self.opacity_slider.value() / 100.0,
+                "font_size": int(self.font_size_input.text())
+            })
+            self.settings_manager.save_settings()
+            self.accept()
+        except ValueError as e:
+            logger.error(f"Ошибка сохранения настроек: {e}")
+            QMessageBox.warning(self, self.language_manager.get("error", "Ошибка"),
+                                self.language_manager.get("invalid_font_size", "Введите корректный размер шрифта"))

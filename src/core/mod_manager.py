@@ -1,190 +1,141 @@
-from pathlib import Path
 from core.steam_handler import SteamHandler
-from core.game_manager import GameManager
-from loguru import logger
-import shutil
-import os
-import time
+from ui.dialogs.dependency_dialog import DependencyDialog
+from bs4 import BeautifulSoup
+import aiohttp
 import json
-import sys
+import os
+import hashlib
+from loguru import logger
+
 
 class ModManager:
-    def __init__(self, steamcmd_path):
-        # Определяем базовый путь (где находится .exe или скрипт)
-        if getattr(sys, 'frozen', False):
-            # Если запущен .exe, используем путь к .exe
-            base_path = Path(sys.executable).parent
-        else:
-            # Если запущен скрипт, используем текущую директорию
-            base_path = Path.cwd()
+    """Менеджер модов для управления загрузкой, проверкой и состоянием модов."""
 
-        self.steamcmd_path = steamcmd_path
-        self.steam_handler = SteamHandler(steamcmd_path)
-        self.game_manager = GameManager()
-        self.download_queue = []
-        self.installed_mods = {}
-        self.needs_refresh = True
-        self.queue_file = base_path / "download_queue.json"  # Относительный путь
-        self.load_queue()
-        self._load_installed_mods()
+    def __init__(self):
+        self.queue = []
+        self.steam_handler = None
+        self.cache_path = "data/mod_cache.json"
+        self.mod_cache = self.load_cache()
 
-    def load_queue(self):
-        if self.queue_file.exists():
-            try:
-                with open(self.queue_file, "r", encoding="utf-8") as f:
-                    self.download_queue = json.load(f)
-                logger.info(f"Очередь загрузки загружена из {self.queue_file}: {self.download_queue}")
-            except Exception as e:
-                logger.error(f"Ошибка при загрузке очереди из {self.queue_file}: {e}")
-                self.download_queue = []
-        else:
-            logger.debug("Файл очереди загрузки не найден, инициализируем пустую очередь")
-            self.download_queue = []
-
-    def save_queue(self):
+    def load_cache(self):
+        """Загружает кэш модов из файла."""
         try:
-            with open(self.queue_file, "w", encoding="utf-8") as f:
-                json.dump(self.download_queue, f, indent=4)
-            logger.debug(f"Очередь загрузки сохранена в {self.queue_file}: {self.download_queue}")
+            if os.path.exists(self.cache_path):
+                with open(self.cache_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return {}
         except Exception as e:
-            logger.error(f"Ошибка при сохранении очереди в {self.queue_file}: {e}")
+            logger.error(f"Ошибка загрузки кэша модов: {e}")
+            return {}
 
-    def _load_installed_mods(self):
-        if not self.needs_refresh:
-            logger.debug("Используется кэшированный список установленных модов")
-            return
+    def save_cache(self):
+        """Сохраняет кэш модов в файл."""
+        try:
+            os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
+            with open(self.cache_path, "w", encoding="utf-8") as f:
+                json.dump(self.mod_cache, f, indent=4, ensure_ascii=False)
+            logger.info("Кэш модов сохранен")
+        except Exception as e:
+            logger.error(f"Ошибка сохранения кэша модов: {e}")
 
-        logger.debug("Начало загрузки установленных модов")
-        for game in self.game_manager.games:
-            app_id = game["app_id"]
-            if "mods_path" not in game:
-                logger.warning(f"Игра {app_id} не имеет указанного mods_path, пропускаем загрузку модов")
-                continue
-            mods_path = Path(game["mods_path"])
-            logger.debug(f"Проверка модов для игры {app_id} в папке: {mods_path}")
-            if not mods_path.exists():
-                logger.error(f"Папка mods_path {mods_path} не существует")
-                continue
-            if not os.access(mods_path, os.R_OK):
-                logger.error(f"Нет прав доступа для чтения папки {mods_path}")
-                continue
+    def set_steam_handler(self, steam_handler):
+        """Устанавливает обработчик SteamCMD."""
+        self.steam_handler = steam_handler
 
-            mods_from_filesystem = []
-            for item in mods_path.iterdir():
-                if item.is_dir():
-                    mod_id = item.name
-                    mods_from_filesystem.append(mod_id)
-                    logger.info(f"Обнаружен мод {mod_id} в папке {mods_path}")
+    def add_to_queue(self, game, mod_id):
+        """Добавляет мод в очередь загрузки."""
+        self.queue.append({"game": game, "mod_id": mod_id})
+        logger.info(f"Мод {mod_id} добавлен в очередь")
 
-            mods_from_config = game.get("mods", [])
-            verified_mods = list(set(mods_from_config + mods_from_filesystem))
-            final_mods = {}
-            for mod_id in verified_mods:
-                mod_path = mods_path / str(mod_id)
-                logger.debug(f"Проверка мода {mod_id} по пути: {mod_path}")
-                if mod_path.exists() and mod_path.is_dir():
-                    installed_date = os.path.getmtime(mod_path)
-                    final_mods[mod_id] = {
-                        "path": str(mod_path),
-                        "installed_date": installed_date
+    def clear_queue(self):
+        """Очищает очередь загрузки."""
+        self.queue.clear()
+        logger.info("Очередь очищена")
+
+    async def check_dependencies(self, app_id, mod_id, parent=None):
+        """Проверяет зависимости мода, используя кэш или парсинг страницы."""
+        if mod_id in self.mod_cache:
+            logger.info(f"Использован кэш для мода {mod_id}")
+            return self.mod_cache[mod_id].get("dependencies", [])
+
+        url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={mod_id}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    soup = BeautifulSoup(await response.text(), "html.parser")
+                    dep_section = soup.find("div", class_="requiredItems")
+                    dependencies = []
+                    if dep_section:
+                        dep_links = dep_section.find_all("a")
+                        dependencies = [link["href"].split("id=")[-1] for link in dep_links]
+                    self.mod_cache[mod_id] = self.mod_cache.get(mod_id, {})
+                    self.mod_cache[mod_id]["dependencies"] = dependencies
+                    self.save_cache()
+                    if dependencies and parent:
+                        dialog = DependencyDialog(dependencies, parent)
+                        if dialog.exec():
+                            return dialog.selected_dependencies
+                    return dependencies
+        return []
+
+    async def get_mod_info(self, mod_id):
+        """Получает информацию о моде (название, описание) из Steam Workshop."""
+        if mod_id in self.mod_cache and "name" in self.mod_cache[mod_id] and "description" in self.mod_cache[mod_id]:
+            logger.info(f"Использован кэш для информации о моде {mod_id}")
+            return self.mod_cache[mod_id]
+
+        url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={mod_id}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    soup = BeautifulSoup(await response.text(), "html.parser")
+                    name = soup.find("div", class_="workshopItemTitle")
+                    description = soup.find("div", class_="workshopItemDescription")
+                    mod_info = {
+                        "name": name.text.strip() if name else "Неизвестный мод",
+                        "description": description.text.strip() if description else "Описание отсутствует",
+                        "dependencies": self.mod_cache.get(mod_id, {}).get("dependencies", [])
                     }
-                    logger.info(f"Мод {mod_id} подтверждён для игры {app_id} в {mod_path}, дата установки: {installed_date}")
-                else:
-                    logger.warning(f"Мод {mod_id} для игры {app_id} не найден в {mod_path}, исключаем из списка")
+                    self.mod_cache[mod_id] = mod_info
+                    self.save_cache()
+                    return mod_info
+        return {"name": "Неизвестный мод", "description": "Ошибка загрузки", "dependencies": []}
 
-            self.installed_mods[app_id] = final_mods
-            logger.debug(f"Загружены установленные моды для игры {app_id}: {list(final_mods.keys())}")
-            game["mods"] = list(final_mods.keys())
+    def download_mod(self, game, mod_id, console_tab):
+        """Запускает загрузку мода через SteamCMD."""
+        if self.steam_handler:
+            success = self.steam_handler.download_mod(game.app_id, mod_id, game.mods_path, console_tab)
+            if success:
+                self.check_mod_integrity(game.mods_path, mod_id)
+            return success
+        return False
 
-        self.game_manager.save_games()
-        self.needs_refresh = False
-
-    def get_installed_mods(self, app_id):
-        if app_id not in self.installed_mods or self.needs_refresh:
-            self._load_installed_mods()
-        return list(self.installed_mods.get(app_id, {}).keys())
-
-    def get_installed_mod_info(self, app_id, mod_id):
-        return self.installed_mods.get(app_id, {}).get(mod_id, None)
-
-    def add_to_queue(self, app_id, mod_id):
-        self.download_queue.append((app_id, mod_id))
-        self.needs_refresh = True
-        self.save_queue()  # Сохраняем очередь после добавления
-        logger.info(f"Мод {mod_id} добавлен в очередь для игры {app_id}")
-
-    def add_installed_mod(self, app_id, mod_id):
-        game = self.game_manager.get_game(app_id)
-        if not game or "mods_path" not in game:
-            logger.error(f"Игра {app_id} не найдена или не указан mods_path")
-            return
-
-        mods_path = Path(game["mods_path"])
-        mod_path = mods_path / str(mod_id)
-        logger.debug(f"Добавление мода {mod_id} для игры {app_id}, проверка пути: {mod_path}")
-        if not mod_path.exists():
-            logger.error(f"Мод {mod_id} не найден в {mod_path}, не добавляем в список установленных")
-            return
-
-        if app_id not in self.installed_mods:
-            self.installed_mods[app_id] = {}
-        self.installed_mods[app_id][mod_id] = {
-            "path": str(mod_path),
-            "installed_date": time.time()
-        }
-        logger.info(f"Мод {mod_id} добавлен в список установленных для игры {app_id}")
-
-        if "mods" not in game:
-            game["mods"] = []
-        if mod_id not in game["mods"]:
-            game["mods"].append(mod_id)
-            self.game_manager.save_games()
-            logger.debug(f"Мод {mod_id} синхронизирован с GameManager для игры {app_id}")
-
-        self.needs_refresh = True
-
-    def download_next(self, progress_callback=None):
-        if not self.download_queue:
-            logger.warning("Очередь загрузки пуста")
+    def check_mod_integrity(self, mods_path, mod_id):
+        """Проверяет целостность загруженного мода."""
+        mod_path = os.path.join(mods_path, mod_id)
+        if not os.path.exists(mod_path):
+            logger.error(f"Мод {mod_id} не найден в {mod_path}")
             return False
 
-        app_id, mod_id = self.download_queue.pop(0)
-        success = self.steam_handler.download_mod(app_id, mod_id, progress_callback)
+        # Простая проверка: вычисляем хэш содержимого папки мода
+        hash_md5 = hashlib.md5()
+        for root, _, files in os.walk(mod_path):
+            for file in sorted(files):
+                with open(os.path.join(root, file), "rb") as f:
+                    for chunk in iter(lambda: f.read(4096), b""):
+                        hash_md5.update(chunk)
+        mod_hash = hash_md5.hexdigest()
+        logger.info(f"Хэш мода {mod_id}: {mod_hash}")
+        # Здесь можно добавить сравнение с ожидаемым хэшем, если он доступен
+        return True
 
-        if success:
-            game = self.game_manager.get_game(app_id)
-            if game and "mods_path" in game:
-                source_path = Path(self.steamcmd_path).parent / "steamapps" / "workshop" / "content" / str(app_id) / str(mod_id)
-                dest_path = Path(game["mods_path"]) / str(mod_id)
-
-                try:
-                    if source_path.exists():
-                        dest_path.parent.mkdir(parents=True, exist_ok=True)
-                        if dest_path.exists():
-                            shutil.rmtree(dest_path)
-                        shutil.move(source_path, dest_path)
-                        logger.info(f"Мод {mod_id} перемещён в {dest_path}")
-                        self.add_installed_mod(app_id, mod_id)
-                    else:
-                        logger.error(f"Исходный путь мода {source_path} не найден")
-                        success = False
-                except Exception as e:
-                    logger.error(f"Ошибка при перемещении мода {mod_id}: {e}")
-                    success = False
-            else:
-                logger.error(f"Игра {app_id} не найдена или не указан mods_path")
-                success = False
-
-        self.save_queue()  # Сохраняем очередь после удаления элемента
-        return success
-
-    def check_pending_downloads(self):
-        """Проверяет, есть ли моды в очереди, которые ещё не установлены."""
-        if not self.download_queue:
-            return []
-
-        pending_downloads = []
-        for app_id, mod_id in self.download_queue:
-            if app_id not in self.installed_mods or mod_id not in self.installed_mods[app_id]:
-                pending_downloads.append((app_id, mod_id))
-        return pending_downloads
+    def toggle_mod(self, game, mod_id, enable=True):
+        """Включает или отключает мод, переименовывая его папку."""
+        mod_path = os.path.join(game.mods_path, mod_id)
+        disabled_path = os.path.join(game.mods_path, f"{mod_id}_disabled")
+        if enable and os.path.exists(disabled_path):
+            os.rename(disabled_path, mod_path)
+            logger.info(f"Мод {mod_id} включен для игры {game.name}")
+        elif not enable and os.path.exists(mod_path):
+            os.rename(mod_path, disabled_path)
+            logger.info(f"Мод {mod_id} отключен для игры {game.name}")

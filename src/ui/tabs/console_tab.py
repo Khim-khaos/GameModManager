@@ -1,37 +1,29 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QPushButton
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit
+from PySide6.QtCore import QProcess
 from loguru import logger
 
 class ConsoleTab(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
-        self.parent = parent
-        self.init_ui()
-
-    def init_ui(self):
-        layout = QVBoxLayout()
+        self.main_window = parent
+        self.layout = QVBoxLayout(self)
         self.console_output = QTextEdit()
         self.console_output.setReadOnly(True)
-        layout.addWidget(self.console_output)
+        self.layout.addWidget(self.console_output)
+        self.process = QProcess(self)
+        self.process.readyReadStandardOutput.connect(self.handle_output)
+        self.process.readyReadStandardError.connect(self.handle_error)
 
-        self.clear_button = QPushButton("Очистить консоль")
-        self.clear_button.clicked.connect(self.clear_console)
-        layout.addWidget(self.clear_button)
-
-        self.setLayout(layout)
-
-        # Подписка на логи
-        logger.add(self.log_handler, format="{time} {level} {message}")
-
-    def update_ui_texts(self):
-        self.clear_button.setText("Очистить консоль")
-
-    def log_handler(self, message):
-        self.console_output.append(message.strip())
-
-    def clear_console(self):
+    def update_game(self, game):
         self.console_output.clear()
-        logger.info("Консоль очищена")
+        logger.info("Консоль очищена для новой игры")
 
-    def append_message(self, message):
-        self.console_output.append(message)
-        logger.debug(f"Сообщение добавлено в консоль: {message}")
+    def handle_output(self):
+        data = self.process.readAllStandardOutput().data().decode("utf-8")
+        self.console_output.append(data)
+        logger.debug(f"SteamCMD вывод: {data}")
+
+    def handle_error(self):
+        data = self.process.readAllStandardError().data().decode("utf-8")
+        self.console_output.append(f"<font color='red'>{data}</font>")
+        logger.error(f"SteamCMD ошибка: {data}")
