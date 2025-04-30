@@ -160,3 +160,4 @@ cython_debug/
 #.idea/
 /.idea
 src/models/__init__.py
+/.idea
