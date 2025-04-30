@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="db23f173-4093-469e-ba77-53d785cc7638" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/build_exe.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/assets/backgrounds/1c371faf-1f1b-4c19-88f3-c7351d43e2ec.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/download_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/download_manager.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/game_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/game_manager.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/mod_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/mod_manager.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/steam_handler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/steam_handler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/config.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/config.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/games.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/games.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/language/en.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/language/en.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/language/rus.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/language/rus.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/dialogs/settings_dialog.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/dialogs/settings_dialog.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/main_window.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/main_window.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/tabs/browser_tab.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/tabs/browser_tab.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/tabs/console_tab.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/tabs/console_tab.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/tabs/games_tab.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/tabs/games_tab.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
+  <component name="ProjectId" id="2tcn7WTIao9yB53zSnMnHOaRoBp" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;E:/GameModManager/src/main.py&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="E:\GameModManager\src\assets\backgrounds" />
+      <recent name="E:\GameModManager\src" />
+    </key>
+  </component>
+  <component name="RunManager">
+    <configuration name="main" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="GameModManager" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="E:\GameModManager\venv\Scripts\python.exe" />
+      <option name="SDK_NAME" value="Python 3.11 (GameModManager)" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="db23f173-4093-469e-ba77-53d785cc7638" name="Changes" comment="" />
+      <created>1740660064675</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1740660064675</updated>
+      <workItem from="1740660067753" duration="310000" />
+      <workItem from="1740661754130" duration="190000" />
+      <workItem from="1740663512806" duration="10000" />
+      <workItem from="1740663544244" duration="835000" />
+      <workItem from="1740730102246" duration="124000" />
+      <workItem from="1740730284114" duration="2849000" />
+      <workItem from="1743846144307" duration="3459000" />
+      <workItem from="1743859376815" duration="8471000" />
+      <workItem from="1743933397252" duration="3143000" />
+      <workItem from="1743942755212" duration="2817000" />
+      <workItem from="1743946355998" duration="3236000" />
+      <workItem from="1744007335767" duration="658000" />
+      <workItem from="1744099091647" duration="14431000" />
+      <workItem from="1744115456377" duration="1087000" />
+      <workItem from="1744175398614" duration="1241000" />
+      <workItem from="1745143781662" duration="23240000" />
+      <workItem from="1745241536342" duration="119000" />
+      <workItem from="1745252575744" duration="157000" />
+      <workItem from="1745899473612" duration="1466000" />
+      <workItem from="1745988368070" duration="749000" />
+      <workItem from="1745989345807" duration="419000" />
+      <workItem from="1745992292970" duration="2295000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/GameModManager$main.coverage" NAME="main Coverage Results" MODIFIED="1745241599593" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src" />
+  </component>
+</project>

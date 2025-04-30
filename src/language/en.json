@@ -1,0 +1,14 @@
+{
+    "language_name": "English",
+    "title": "GameModManager",
+    "select_steamcmd": "Select SteamCMD",
+    "language": "Language",
+    "theme": "Theme",
+    "add_game": "Add Game",
+    "edit_game": "Edit Game",
+    "remove_game": "Remove Game",
+    "settings": "Settings",
+    "tab_games": "Games",
+    "tab_browser": "Browser",
+    "tab_console": "Console"
+}

@@ -1,0 +1,14 @@
+{
+    "language_name": "Русский",
+    "title": "GameModManager",
+    "select_steamcmd": "Выберите SteamCMD",
+    "language": "Язык",
+    "theme": "Тема",
+    "add_game": "Добавить игру",
+    "edit_game": "Редактировать игру",
+    "remove_game": "Удалить игру",
+    "settings": "Настройки",
+    "tab_games": "Игры",
+    "tab_browser": "Браузер",
+    "tab_console": "Консоль"
+}
