@@ -1,0 +1,79 @@
+{
+  "language_name": "Русский",
+  "app": {
+    "title": "GameModManager",
+    "author": "от Khim_Khaosow"
+  },
+  "menu": {
+    "file": "Файл",
+    "edit": "Правка",
+    "view": "Вид",
+    "tools": "Инструменты",
+    "help": "Справка",
+    "settings": "Настройки",
+    "exit": "Выход"
+  },
+  "tabs": {
+    "mods": "Моды",
+    "browser": "Браузер",
+    "console": "Консоль",
+    "logs": "Логи"
+  },
+  "game": {
+    "select_game": "Выберите игру",
+    "add_game": "Добавить игру",
+    "edit_game": "Редактировать игру",
+    "remove_game": "Удалить игру",
+    "launch_game": "Запустить игру",
+    "stop_game": "Остановить игру",
+    "game_running": "Игра запущена",
+    "game_stopped": "Игра остановлена"
+  },
+  "mod": {
+    "installed_mods": "Установленные моды",
+    "mod_info": "Информация о моде",
+    "author": "Автор",
+    "created": "Создан",
+    "updated": "Обновлен",
+    "dependencies": "Зависимости",
+    "enable": "Включить",
+    "disable": "Отключить",
+    "remove": "Удалить",
+    "update": "Обновить",
+    "view_page": "Открыть страницу"
+  },
+  "browser": {
+    "download_queue": "Очередь загрузки",
+    "add_to_queue": "Добавить в очередь",
+    "download": "Скачать",
+    "remove_from_queue": "Убрать из очереди",
+    "refresh": "Обновить",
+    "back": "Назад",
+    "forward": "Вперед"
+  },
+  "dialogs": {
+    "add_game": {
+      "title": "Добавить игру",
+      "name": "Название игры",
+      "steam_id": "Steam ID",
+      "executable_path": "Путь к исполняемому файлу",
+      "mods_path": "Путь к папке модов",
+      "browse": "Обзор",
+      "ok": "ОК",
+      "cancel": "Отмена"
+    },
+    "settings": {
+      "title": "Настройки",
+      "steamcmd_path": "Путь к SteamCMD",
+      "language": "Язык",
+      "theme": "Тема",
+      "auto_update": "Автопроверка обновлений"
+    }
+  },
+  "messages": {
+    "error": "Ошибка",
+    "warning": "Предупреждение",
+    "info": "Информация",
+    "success": "Успех"
+  }
+}

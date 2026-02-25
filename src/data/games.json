@@ -1,0 +1,16 @@
+[
+    {
+        "name": "Space Engineers",
+        "steam_id": "244850",
+        "executable_path": "D:\\games\\Space Engineers\\Bin64\\SpaceEngineers.exe",
+        "mods_path": "C:\\Users\\saskn\\AppData\\Roaming\\SpaceEngineers\\Mods",
+        "is_running": false
+    },
+    {
+        "name": "Noita",
+        "steam_id": "881100",
+        "executable_path": "D:\\games\\Noita v25.01.2025\\noita.exe",
+        "mods_path": "D:\\games\\Noita v25.01.2025\\mods",
+        "is_running": false
+    }
+]

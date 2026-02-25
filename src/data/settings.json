@@ -1,0 +1,13 @@
+{
+    "steamcmd_path": "D:\\steamcmd\\steamcmd.exe",
+    "language": "rus",
+    "theme": {
+        "background": "#2b2b2b",
+        "foreground": "#ffffff",
+        "accent": "#0078d4",
+        "secondary": "#404040"
+    },
+    "auto_update_check": false,
+    "download_timeout": 300,
+    "max_concurrent_downloads": 3
+}

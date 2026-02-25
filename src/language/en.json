@@ -1,0 +1,79 @@
+{
+  "language_name": "English",
+  "app": {
+    "title": "GameModManager",
+    "author": "by Khim_Khaosow"
+  },
+  "menu": {
+    "file": "File",
+    "edit": "Edit",
+    "view": "View",
+    "tools": "Tools",
+    "help": "Help",
+    "settings": "Settings",
+    "exit": "Exit"
+  },
+  "tabs": {
+    "mods": "Mods",
+    "browser": "Browser",
+    "console": "Console",
+    "logs": "Logs"
+  },
+  "game": {
+    "select_game": "Select Game",
+    "add_game": "Add Game",
+    "edit_game": "Edit Game",
+    "remove_game": "Remove Game",
+    "launch_game": "Launch Game",
+    "stop_game": "Stop Game",
+    "game_running": "Game Running",
+    "game_stopped": "Game Stopped"
+  },
+  "mod": {
+    "installed_mods": "Installed Mods",
+    "mod_info": "Mod Information",
+    "author": "Author",
+    "created": "Created",
+    "updated": "Updated",
+    "dependencies": "Dependencies",
+    "enable": "Enable",
+    "disable": "Disable",
+    "remove": "Remove",
+    "update": "Update",
+    "view_page": "View Page"
+  },
+  "browser": {
+    "download_queue": "Download Queue",
+    "add_to_queue": "Add to Queue",
+    "download": "Download",
+    "remove_from_queue": "Remove from Queue",
+    "refresh": "Refresh",
+    "back": "Back",
+    "forward": "Forward"
+  },
+  "dialogs": {
+    "add_game": {
+      "title": "Add Game",
+      "name": "Game Name",
+      "steam_id": "Steam ID",
+      "executable_path": "Executable Path",
+      "mods_path": "Mods Path",
+      "browse": "Browse",
+      "ok": "OK",
+      "cancel": "Cancel"
+    },
+    "settings": {
+      "title": "Settings",
+      "steamcmd_path": "SteamCMD Path",
+      "language": "Language",
+      "theme": "Theme",
+      "auto_update": "Auto Update Check"
+    }
+  },
+  "messages": {
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Information",
+    "success": "Success"
+  }
+}
