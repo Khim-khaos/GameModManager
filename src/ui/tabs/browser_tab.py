@@ -445,21 +445,29 @@ class BrowserTab(wx.Panel):
 
                 # --- ИМПОРТЫ ---
                 from src.models.mod import Mod, ModDependency
+                from src.core.steam_workshop_service import steam_workshop_service
                 # ---------------
 
-                # - ИСПРАВЛЕНИЕ: Передаем зависимости правильно -
-                # Создаем полноценные объекты ModDependency для зависимостей
-                mod_dependencies_raw = []
-                for dep_id in dependencies:
-                    # Проверяем, установлен ли этот мод (используя кэш)
-                    is_installed = dep_id in self.installed_mod_ids
-                    # Создаем объект зависимости как ModDependency
-                    dep_mod = ModDependency(
-                        mod_id=dep_id,
-                        name=f"Зависимость {dep_id}", # Имя по умолчанию, можно попробовать получить настоящее имя позже
-                        is_installed=is_installed # <-- is_installed относится к ModDependency
+                # - ИСПРАВЛЕНИЕ: Получаем реальные названия зависимостей через steam_workshop_service -
+                try:
+                    mod_dependencies_raw = steam_workshop_service.get_mod_dependency_details(
+                        mod_id, 
+                        self.installed_mod_ids
                     )
-                    mod_dependencies_raw.append(dep_mod) # Добавляем объект ModDependency
+                    logger.info(f"[Browser/Add] Получены детали для {len(mod_dependencies_raw)} зависимостей мода {mod_id}")
+                except Exception as e:
+                    logger.error(f"[Browser/Add] Ошибка при получении деталей зависимостей: {e}")
+                    # В случае ошибки используем запасной вариант
+                    mod_dependencies_raw = []
+                    for dep_id in dependencies:
+                        is_installed = dep_id in self.installed_mod_ids
+                        dep_mod = ModDependency(
+                            mod_id=dep_id,
+                            name=f"Зависимость {dep_id}",
+                            is_installed=is_installed
+                        )
+                        mod_dependencies_raw.append(dep_mod)
+                # - КОНЕЦ ИСПРАВЛЕНИЯ -
 
                 # Создаем основной мод с зависимостями (пустыми, заполним позже)
                 mod = Mod(
@@ -469,7 +477,6 @@ class BrowserTab(wx.Panel):
                     workshop_url=url,
                     dependencies=[] # Пока пусто, заполним позже
                 )
-                # - КОНЕЦ ИСПРАВЛЕНИЯ -
 
                 # --- ЛОГИКА С ДИАЛОГОМ ---
                 if mod_dependencies_raw: # Если есть зависимости
