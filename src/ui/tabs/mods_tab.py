@@ -1010,10 +1010,12 @@ class ModsTab(wx.Panel):
         if not self: return
         try:
             if not self.names_dialog:
+                # Защита от некорректных значений total
+                safe_total = max(1, total)  # Минимум 1
                 self.names_dialog = wx.ProgressDialog(
                     "Загрузка названий модов",
                     f"Загружено 0 из {total}...",
-                    maximum=total,
+                    maximum=safe_total,
                     parent=self,
                     style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_CAN_ABORT
                 )
@@ -1031,12 +1033,19 @@ class ModsTab(wx.Panel):
         if not self.names_dialog:
             return
         try:
-            safe_current = min(current, total)
-            keep_going, skip = self.names_dialog.Update(safe_current, f"Загружено {current} из {total}...")
-            if not keep_going:
-                logger.info("[ModsTab/NamesDialog] Загрузка названий прервана пользователем через диалог.")
-                self.names_aborted = True
-                self._hide_names_loading_dialog()
+            # Убеждаемся, что current не превышает total
+            safe_current = max(0, min(current, total))
+            # Если total = 0, устанавливаем safe_current = 0
+            if total <= 0:
+                safe_current = 0
+            
+            # Обновляем диалог только если значение валидное
+            if safe_current <= total:
+                keep_going, skip = self.names_dialog.Update(safe_current, f"Загружено {current} из {total}...")
+                if not keep_going:
+                    logger.info("[ModsTab/NamesDialog] Загрузка названий прервана пользователем через диалог.")
+                    self.names_aborted = True
+                    self._hide_names_loading_dialog()
         except RuntimeError:
             pass
         except Exception as e:
