@@ -247,6 +247,15 @@ class BrowserTab(wx.Panel):
             self.url_text.SetValue(dependency_url)
             return
         
+        # Проверяем, это специальный URL для быстрого добавления мода
+        if url.startswith('wxpython://quick_add/'):
+            event.Veto()  # Останавливаем навигацию
+            mod_id = url.replace('wxpython://quick_add/', '')
+            logger.info(f"[Browser] Быстрое добавление мода: {mod_id}")
+            # Добавляем мод в очередь с проверкой зависимостей
+            self._quick_add_mod_to_queue(mod_id)
+            return
+        
         self.url_text.SetValue(url)
         # Определяем, является ли URL страницей мода или коллекции
         is_mod_page = "steamcommunity.com/sharedfiles/filedetails/" in url and "id=" in url
@@ -264,6 +273,137 @@ class BrowserTab(wx.Panel):
         # event.Skip() вызывается автоматически, если не вызван event.Veto()
 
     # --- КОНЕЦ ИСПРАВЛЕННОГО _on_navigating ---
+
+    # --- НОВЫЙ МЕТОД: Быстрое добавление мода в очередь ---
+    def _quick_add_mod_to_queue(self, mod_id):
+        """Быстро добавляет мод в очередь с проверкой зависимостей."""
+        if not self.current_game:
+            wx.CallAfter(lambda: wx.MessageBox("Сначала выберите игру", "Ошибка", wx.OK | wx.ICON_WARNING))
+            return
+            
+        # Проверяем, нет ли уже в очереди
+        if self.download_manager.is_in_queue(mod_id):
+            logger.info(f"[Browser/QuickAdd] Мод {mod_id} уже в очереди")
+            return
+            
+        # Получаем данные мода
+        mod_url = f"https://steamcommunity.com/workshop/filedetails/?id={mod_id}"
+        mod_name = f"Мод {mod_id}"
+        dependencies = []
+        
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+            }
+            logger.debug(f"[Browser/QuickAdd] Запрос данных мода {mod_id}")
+            response = requests.get(mod_url, headers=headers, timeout=15)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                title_elem = soup.find('div', class_='workshopItemTitle')
+                if title_elem:
+                    mod_name = title_elem.text.strip()
+                    
+                # Ищем зависимости
+                required_items_container = soup.find('div', id='RequiredItems')
+                if not required_items_container:
+                    required_items_container = soup.find('div', class_='requiredItemsContainer')
+                    
+                if required_items_container:
+                    required_links = required_items_container.find_all('a', href=re.compile(r'https://steamcommunity\.com/workshop/filedetails/\?id=\d+'))
+                    for link in required_links:
+                        href = link.get('href', '')
+                        dep_match = re.search(r'id=(\d+)', href)
+                        if dep_match:
+                            dep_id = dep_match.group(1)
+                            if dep_id and dep_id != mod_id and dep_id not in dependencies:
+                                dependencies.append(dep_id)
+                                
+                logger.info(f"[Browser/QuickAdd] Мод '{mod_name}' ({mod_id}) найден. Зависимости: {dependencies}")
+            else:
+                logger.error(f"[Browser/QuickAdd] Ошибка запроса страницы мода: {response.status_code}")
+                wx.CallAfter(lambda: wx.MessageBox("Не удалось получить информацию о моде", "Ошибка", wx.OK | wx.ICON_ERROR))
+                return
+                
+        except Exception as e:
+            logger.error(f"[Browser/QuickAdd] Ошибка при парсинге страницы мода: {e}")
+            wx.CallAfter(lambda: wx.MessageBox("Ошибка при получении данных мода", "Ошибка", wx.OK | wx.ICON_ERROR))
+            return
+
+        # Импортируем необходимые классы
+        from src.models.mod import Mod, ModDependency
+        from src.core.steam_workshop_service import steam_workshop_service
+
+        # Получаем детали зависимостей
+        try:
+            mod_dependencies_raw = steam_workshop_service.get_mod_dependency_details(
+                mod_id, 
+                self.installed_mod_ids
+            )
+            logger.info(f"[Browser/QuickAdd] Получены детали для {len(mod_dependencies_raw)} зависимостей мода {mod_id}")
+        except Exception as e:
+            logger.error(f"[Browser/QuickAdd] Ошибка при получении деталей зависимостей: {e}")
+            mod_dependencies_raw = []
+            for dep_id in dependencies:
+                is_installed = dep_id in self.installed_mod_ids
+                dep_mod = ModDependency(
+                    mod_id=dep_id,
+                    name=f"Зависимость {dep_id}",
+                    is_installed=is_installed
+                )
+                mod_dependencies_raw.append(dep_mod)
+
+        # Создаем основной мод
+        mod = Mod(
+            mod_id=mod_id,
+            name=mod_name,
+            author="Неизвестен",
+            workshop_url=mod_url,
+            dependencies=[]
+        )
+
+        # Показываем диалог зависимостей если они есть
+        if mod_dependencies_raw:
+            def show_dialog():
+                dlg = DependencyConfirmationDialog(self, mod, mod_dependencies_raw, self.installed_mod_ids)
+                if dlg.ShowModal() == wx.ID_OK:
+                    selected_dep_items = dlg.get_selected_dependencies()
+                    logger.info(f"[Browser/QuickAdd] Пользователь выбрал {len(selected_dep_items)} зависимостей для установки.")
+
+                    # Добавляем выбранные зависимости
+                    added_deps_count = 0
+                    for dep_item in selected_dep_items:
+                        if not self.download_manager.is_in_queue(dep_item.mod_id):
+                            dep_mod_for_queue = Mod(
+                                mod_id=dep_item.mod_id,
+                                name=dep_item.name,
+                                author="Неизвестен",
+                                workshop_url=f"https://steamcommunity.com/workshop/filedetails/?id={dep_item.mod_id}",
+                                is_enabled=False
+                            )
+                            self.download_manager.add_to_queue(dep_mod_for_queue)
+                            added_deps_count += 1
+
+                    if added_deps_count > 0:
+                        self._update_queue_list()
+
+                    # Добавляем основной мод
+                    mod.dependencies = [dep_item for dep_item in selected_dep_items]
+                    self.download_manager.add_to_queue(mod)
+                    self._update_queue_list()
+
+                    logger.info(f"[Browser/QuickAdd] Мод '{mod_name}' ({mod_id}) и {added_deps_count} его зависимостей добавлены в очередь.")
+                else:
+                    logger.info(f"[Browser/QuickAdd] Пользователь отменил добавление мода '{mod_name}' и его зависимостей.")
+                dlg.Destroy()
+                
+            wx.CallAfter(show_dialog)
+        else:
+            # Нет зависимостей, просто добавляем основной мод
+            self.download_manager.add_to_queue(mod)
+            self._update_queue_list()
+            logger.info(f"[Browser/QuickAdd] Мод '{mod_name}' ({mod_id}) добавлен в очередь загрузки (без зависимостей).")
+
+    # --- КОНЕЦ НОВОГО МЕТОДА ---
 
     # --- ИСПРАВЛЕННЫЙ _on_loaded с индикацией ---
     def _on_loaded(self, event):
@@ -305,7 +445,7 @@ class BrowserTab(wx.Panel):
                     }}
                 }}
                 // 2. Индикация для модов на страницах списков/коллекций
-                // Ищем контейнеры модов. Это может быть .workshopBrowseItems, .workshopItem, div с data-publishedfileid и т.д.
+                // Ищем контейнеры модов. Это может быть .workshopItem, [data-publishedfileid] и т.д.
                 // Пример для страницы коллекции или списка:
                 var potentialModContainers = document.querySelectorAll('.workshopItem, [data-publishedfileid]'); 
                 console.log("Found", potentialModContainers.length, "potential mod containers.");
@@ -332,7 +472,7 @@ class BrowserTab(wx.Panel):
                     }}
                     if (modId && installedIds.has(modId)) {{
                         console.log("Marking container for mod ID:", modId);
-                        // Выделяем весь контейнер
+                        // Выделяем весь контейнер зеленым
                         container.style.border = '2px solid green';
                         container.style.borderRadius = '5px';
                         container.style.boxShadow = 'inset 0 0 5px rgba(0, 128, 0, 0.3)';
@@ -341,6 +481,98 @@ class BrowserTab(wx.Panel):
                         var titleElemInContainer = container.querySelector('.workshopItemTitle');
                         if (titleElemInContainer && !titleElemInContainer.innerHTML.includes('&#x2714;')) {{
                              titleElemInContainer.innerHTML = '&#x2714; ' + titleElemInContainer.innerHTML;
+                        }}
+                    }} else if (modId) {{
+                        // Если мод не установлен, делаем серую рамку
+                        container.style.border = '2px solid #ccc';
+                        container.style.borderRadius = '5px';
+                        container.style.backgroundColor = 'rgba(200, 200, 200, 0.05)';
+                    }}
+                    
+                    // Добавляем кнопку + для быстрого добавления
+                    if (modId) {{
+                        var titleElem = container.querySelector('.workshopItemTitle');
+                        if (titleElem) {{
+                            // Проверяем, есть ли уже кнопка
+                            var existingBtn = container.querySelector('.quick-add-btn');
+                            if (!existingBtn) {{
+                                // Создаем контейнер для заголовка и кнопки
+                                var titleContainer = document.createElement('div');
+                                titleContainer.style.cssText = `
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: space-between;
+                                    flex-wrap: wrap;
+                                    gap: 5px;
+                                `;
+                                
+                                // Переносим заголовок в новый контейнер
+                                var titleClone = titleElem.cloneNode(true);
+                                titleClone.style.cssText = `
+                                    flex: 1;
+                                    min-width: 0;
+                                    margin: 0;
+                                    padding: 0;
+                                `;
+                                
+                                var addBtn = document.createElement('button');
+                                addBtn.innerHTML = '+';
+                                addBtn.className = 'quick-add-btn';
+                                addBtn.style.cssText = `
+                                    margin-left: 10px;
+                                    padding: 4px 10px;
+                                    background-color: #007bff;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 4px;
+                                    cursor: pointer;
+                                    font-size: 12px;
+                                    font-weight: bold;
+                                    flex-shrink: 0;
+                                    transition: background-color 0.2s;
+                                    min-width: 30px;
+                                    height: 24px;
+                                    line-height: 1;
+                                    box-sizing: border-box;
+                                `;
+                                addBtn.title = 'Добавить мод в очередь';
+                                
+                                // Обработчик клика для кнопки +
+                                addBtn.addEventListener('click', function(e) {{
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    console.log('Quick add clicked for mod:', modId);
+                                    
+                                    // Блокируем кнопку на время обработки
+                                    this.disabled = true;
+                                    this.style.backgroundColor = '#6c757d';
+                                    this.innerHTML = '...';
+                                    
+                                    // Отправляем событие в Python
+                                    var specialUrl = 'wxpython://quick_add/' + modId;
+                                    window.location.href = specialUrl;
+                                }});
+                                
+                                // Наведение на кнопку
+                                addBtn.addEventListener('mouseenter', function() {{
+                                    if (!this.disabled) {{
+                                        this.style.backgroundColor = '#0056b3';
+                                    }}
+                                }});
+                                
+                                addBtn.addEventListener('mouseleave', function() {{
+                                    if (!this.disabled) {{
+                                        this.style.backgroundColor = '#007bff';
+                                    }}
+                                }});
+                                
+                                // Собираем все вместе
+                                titleContainer.appendChild(titleClone);
+                                titleContainer.appendChild(addBtn);
+                                
+                                // Заменяем оригинальный заголовок
+                                titleElem.parentNode.replaceChild(titleContainer, titleElem);
+                            }}
                         }}
                     }}
                 }});
