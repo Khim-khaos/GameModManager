@@ -147,6 +147,9 @@ class BrowserTab(wx.Panel):
         self.webview = wx.html2.WebView.New(self.browser_panel)
         # --- Исправление навигации: перехватываем все переходы ---
         self.webview.Bind(wx.html2.EVT_WEBVIEW_NAVIGATING, self._on_navigating)
+        # --- Удаляем обработчик скриптов, используем навигацию ---
+        # self.webview.Bind(wx.html2.EVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED, self._on_script_message)
+        # self.webview.AddScriptMessageHandler("scriptHandler")
         # ---------------------------------------------------------
         self.webview.Bind(wx.html2.EVT_WEBVIEW_LOADED, self._on_loaded)
         browser_sizer.Add(self.webview, 1, wx.ALL | wx.EXPAND, 5)
@@ -232,6 +235,18 @@ class BrowserTab(wx.Panel):
         """
         url = event.GetURL()
         logger.debug(f"[Browser] Navigating to: {url}")
+        
+        # Проверяем, это специальный URL для клика по зависимости
+        if url.startswith('wxpython://dependency_click/'):
+            event.Veto()  # Останавливаем навигацию
+            mod_id = url.replace('wxpython://dependency_click/', '')
+            logger.info(f"[Browser] Клик по зависимости: {mod_id}")
+            # Открываем страницу мода в WebView
+            dependency_url = f"https://steamcommunity.com/workshop/filedetails/?id={mod_id}"
+            self.webview.LoadURL(dependency_url)
+            self.url_text.SetValue(dependency_url)
+            return
+        
         self.url_text.SetValue(url)
         # Определяем, является ли URL страницей мода или коллекции
         is_mod_page = "steamcommunity.com/sharedfiles/filedetails/" in url and "id=" in url
@@ -263,7 +278,12 @@ class BrowserTab(wx.Panel):
         self.progress.Hide()
         self.Layout()
         # --- Добавляем визуальную индикацию установленных модов ---
-        if self.installed_mod_ids:
+        logger.info(f"[Browser] Page loaded: {url}, checking for mod indication...")
+        # --- ИСПРАВЛЕНИЕ: Убираем условие на installed_mod_ids для тестирования зависимостей ---
+        # if self.installed_mod_ids:
+        if True:  # Всегда выполняем для тестирования зависимостей
+        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+            logger.info(f"[Browser] Executing JavaScript indication script (installed mods: {len(self.installed_mod_ids) if self.installed_mod_ids else 0})")
             # --- УЛУЧШЕННЫЙ JAVASCRIPT СКРИПТ ---
             # Пытаемся выделить не только ссылки, но и сами блоки модов и зависимости
             script = f"""
@@ -325,44 +345,117 @@ class BrowserTab(wx.Panel):
                     }}
                 }});
                 // 3. Индикация для зависимостей
-                var requiredItemsContainer = document.querySelector('.requiredItemsContainer'); // Исправленный селектор
+                console.log("Starting dependency processing...");
+                var requiredItemsContainer = document.querySelector('.requiredItemsContainer');
+                console.log("Required items container (.requiredItemsContainer):", !!requiredItemsContainer);
+                
+                if (!requiredItemsContainer) {{
+                    requiredItemsContainer = document.querySelector('#RequiredItems');
+                    console.log("Required items container (#RequiredItems):", !!requiredItemsContainer);
+                }}
+                
+                if (!requiredItemsContainer) {{
+                    console.log("Required items container not found, trying other selectors...");
+                    // Попробуем найти по тексту заголовка
+                    var allPanels = document.querySelectorAll('.panel');
+                    console.log("Found", allPanels.length, "panels");
+                    for (var i = 0; i < allPanels.length; i++) {{
+                        var title = allPanels[i].querySelector('.rightSectionTopTitle');
+                        if (title && title.textContent.includes('Необходимые продукты')) {{
+                            requiredItemsContainer = allPanels[i].querySelector('.requiredItemsContainer') || allPanels[i].querySelector('#RequiredItems');
+                            console.log("Found container in panel with title:", !!requiredItemsContainer);
+                            break;
+                        }}
+                    }}
+                }}
+                
                 if (requiredItemsContainer) {{
-                    console.log("Found required items container.");
-                    var requiredItemLinks = requiredItemsContainer.querySelectorAll('a[href*="sharedfiles/filedetails"][href*="id="]');
-                    requiredItemLinks.forEach(function(link) {{
-                        console.log("Processing dependency link:", link.href);
+                    console.log("Found required items container, highlighting it...");
+                    requiredItemsContainer.style.border = '3px solid red'; // Красная рамка для отладки
+                    requiredItemsContainer.style.padding = '5px';
+                    
+                    var requiredItemLinks = requiredItemsContainer.querySelectorAll('a[href*="workshop/filedetails"]');
+                    console.log("Found", requiredItemLinks.length, "workshop links in container");
+                    
+                    requiredItemLinks.forEach(function(link, index) {{
+                        console.log("Processing link", index, ":", link.href);
+                        
+                        // Добавляем визуальную индикацию
+                        link.style.border = '2px solid blue'; // Синяя рамка для найденных ссылок
+                        link.style.margin = '2px';
+                        link.style.padding = '2px';
+                        link.style.display = 'inline-block';
+                        
                         var idMatch = link.href.match(/id=(\\d+)/);
                         if (idMatch) {{
                             var depModId = idMatch[1];
-                            console.log("Dependency mod ID:", depModId);
-                            if (installedIds.has(depModId)) {{
-                                console.log("Dependency is installed:", depModId);
-                                // Добавляем галочку или меняем стиль
-                                var requiredItemDiv = link.querySelector('.requiredItem'); // Или сам link
-                                if (requiredItemDiv) {{
-                                    requiredItemDiv.style.border = '2px solid green';
-                                    requiredItemDiv.style.borderRadius = '3px';
-                                    requiredItemDiv.style.backgroundColor = 'rgba(0, 255, 0, 0.1)';
-                                    if (!requiredItemDiv.innerHTML.includes('&#x2714;')) {{
-                                        // Вставляем галочку в начало
-                                        requiredItemDiv.insertAdjacentHTML('afterbegin', '<span style="color:green;margin-right:5px;">&#x2714;</span>');
-                                    }}
-                                }} else {{
-                                     // Если .requiredItem не найден, меняем стиль самой ссылки
-                                     link.style.border = '2px solid green';
-                                     link.style.borderRadius = '3px';
-                                     link.style.backgroundColor = 'rgba(0, 255, 0, 0.1)';
-                                     // Проверяем, есть ли уже галочка в тексте ссылки
-                                     if (!link.textContent.includes('✓') && !link.innerHTML.includes('&#x2714;')) {{
-                                         // Добавляем галочку в текст ссылки
-                                         link.textContent = '✓ ' + link.textContent;
-                                     }}
-                                }}
+                            console.log("Extracted mod ID:", depModId);
+                            
+                            // Добавляем кликабельность
+                            link.style.cursor = 'pointer';
+                            link.style.textDecoration = 'underline';
+                            link.style.color = '#0066cc';
+                            link.title = 'Кликните, чтобы открыть страницу мода (ID: ' + depModId + ')';
+                            
+                            // Сохраняем ID в data-атрибуте
+                            link.dataset.depId = depModId;
+                            
+                            // Добавляем обработчик клика
+                            link.addEventListener('click', function(e) {{
+                                e.preventDefault();
+                                e.stopPropagation();
+                                var clickedDepId = this.dataset.depId;
+                                console.log('DEPENDENCY CLICKED:', clickedDepId);
+                                console.log('Link:', this.href);
+                                
+                                // Меняем цвет рамки при клике
+                                this.style.border = '3px solid green';
+                                
+                                // Используем специальную URL схему
+                                var specialUrl = 'wxpython://dependency_click/' + clickedDepId;
+                                console.log('Navigating to:', specialUrl);
+                                window.location.href = specialUrl;
+                            }});
+                            
+                            // Меняем рамку на зеленую для ссылок с обработчиками
+                            link.style.border = '2px solid green';
+                            console.log("Added click handler to dependency link", index, "ID:", depModId);
+                        }} else {{
+                            console.log("Could not extract ID from link", index);
+                            link.style.border = '2px solid orange'; // Оранжевая рамка для ссылок без ID
+                        }}
+                    }});
+                    
+                    console.log("Finished processing", requiredItemLinks.length, "dependency links");
+                }} else {{
+                    console.log("Required items container still not found");
+                    
+                    // Fallback: ищем все ссылки на странице
+                    var allWorkshopLinks = document.querySelectorAll('a[href*="workshop/filedetails"]');
+                    console.log("Fallback: found", allWorkshopLinks.length, "workshop links on entire page");
+                    
+                    allWorkshopLinks.forEach(function(link, index) {{
+                        if (index < 5) {{ // Обрабатываем только первые 5 для отладки
+                            link.style.border = '2px solid purple'; // Фиолетовая рамка для fallback
+                            link.style.margin = '1px';
+                            
+                            var idMatch = link.href.match(/id=(\\d+)/);
+                            if (idMatch) {{
+                                var depModId = idMatch[1];
+                                console.log("Fallback processing link", index, "ID:", depModId);
+                                
+                                link.addEventListener('click', function(e) {{
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    console.log('FALLBACK DEPENDENCY CLICKED:', this.dataset.depId || depModId);
+                                    var specialUrl = 'wxpython://dependency_click/' + depModId;
+                                    window.location.href = specialUrl;
+                                }});
+                                
+                                link.style.border = '2px solid cyan'; // Голубая рамка для fallback с обработчиками
                             }}
                         }}
                     }});
-                }} else {{
-                    console.log("Required items container not found.");
                 }}
                 console.log("Finished improved mod indication script.");
             }})();
