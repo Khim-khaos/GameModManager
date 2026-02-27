@@ -4,12 +4,13 @@
 """
 import wx
 from loguru import logger
+from src.core.i18n import _
 
 class SettingsDialog(wx.Dialog):
     """Диалог настроек приложения"""
 
     def __init__(self, parent, settings_manager, language_manager):
-        super().__init__(parent, title="Настройки", size=(500, 400))
+        super().__init__(parent, title=_("dialogs.settings.title"), size=(500, 400))
         self.settings_manager = settings_manager
         self.language_manager = language_manager
         self._create_ui()
@@ -22,9 +23,9 @@ class SettingsDialog(wx.Dialog):
 
         # Путь к SteamCMD
         steamcmd_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        steamcmd_label = wx.StaticText(panel, label="Путь к SteamCMD:")
+        steamcmd_label = wx.StaticText(panel, label=_("dialogs.settings.steamcmd_path") + ":")
         self.steamcmd_text = wx.TextCtrl(panel)
-        steamcmd_browse_btn = wx.Button(panel, label="Обзор")
+        steamcmd_browse_btn = wx.Button(panel, label=_("dialogs.add_game.browse"))
         steamcmd_browse_btn.Bind(wx.EVT_BUTTON, self._on_browse_steamcmd)
         steamcmd_sizer.Add(steamcmd_label, 0, wx.ALL | wx.CENTER, 5)
         steamcmd_sizer.Add(self.steamcmd_text, 1, wx.ALL | wx.EXPAND, 5)
@@ -33,7 +34,7 @@ class SettingsDialog(wx.Dialog):
 
         # Язык
         language_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        language_label = wx.StaticText(panel, label="Язык:")
+        language_label = wx.StaticText(panel, label=_("dialogs.settings.language") + ":")
         self.language_choice = wx.Choice(panel)
         self._populate_language_choice()
         language_sizer.Add(language_label, 0, wx.ALL | wx.CENTER, 5)
@@ -42,22 +43,22 @@ class SettingsDialog(wx.Dialog):
 
         # Тема (упрощенная)
         theme_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        theme_label = wx.StaticText(panel, label="Тема:")
-        self.theme_choice = wx.Choice(panel, choices=["Светлая", "Темная"])
+        theme_label = wx.StaticText(panel, label=_("dialogs.settings.theme") + ":")
+        self.theme_choice = wx.Choice(panel, choices=[_("ui.light"), _("ui.dark")])
         self.theme_choice.SetSelection(1)
         theme_sizer.Add(theme_label, 0, wx.ALL | wx.CENTER, 5)
         theme_sizer.Add(self.theme_choice, 1, wx.ALL | wx.EXPAND, 5)
         main_sizer.Add(theme_sizer, 0, wx.EXPAND)
 
         # Автопроверка обновлений
-        self.auto_update_cb = wx.CheckBox(panel, label="Автопроверка обновлений")
+        self.auto_update_cb = wx.CheckBox(panel, label=_("dialogs.settings.auto_update"))
         main_sizer.Add(self.auto_update_cb, 0, wx.ALL, 5)
 
         # Кнопки
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        ok_btn = wx.Button(panel, wx.ID_OK, "ОК")
+        ok_btn = wx.Button(panel, wx.ID_OK, _("dialogs.add_game.ok"))
         ok_btn.Bind(wx.EVT_BUTTON, self._on_ok)
-        cancel_btn = wx.Button(panel, wx.ID_CANCEL, "Отмена")
+        cancel_btn = wx.Button(panel, wx.ID_CANCEL, _("dialogs.add_game.cancel"))
         button_sizer.Add(ok_btn, 0, wx.ALL, 5)
         button_sizer.Add(cancel_btn, 0, wx.ALL, 5)
         main_sizer.Add(button_sizer, 0, wx.ALIGN_CENTER)
@@ -102,6 +103,11 @@ class SettingsDialog(wx.Dialog):
             languages = self.language_manager.get_available_languages()
             if 0 <= selection < len(languages):
                 selected_lang = languages[selection]['code']
+                old_lang = self.settings_manager.get("language", "en")
                 self.settings_manager.set("language", selected_lang)
                 self.language_manager.set_language(selected_lang)
+                
+                # Если язык изменился, показываем сообщение о необходимости перезапуска
+                if old_lang != selected_lang:
+                    wx.MessageBox(_("messages.language_changed_restart"), _("messages.info"), wx.OK | wx.ICON_INFORMATION)
         self.EndModal(wx.ID_OK)

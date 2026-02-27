@@ -6,6 +6,7 @@ import wx
 import requests
 from loguru import logger
 from src.models.game import Game
+from src.core.i18n import _
 
 class EditGameDialog(wx.Dialog):
     """Диалог редактирования существующей игры"""
@@ -18,7 +19,7 @@ class EditGameDialog(wx.Dialog):
         :param language_manager: Менеджер языков (для будущих локализаций).
         :param initial_game: Объект Game, данные которого будут отображены для редактирования.
         """
-        super().__init__(parent, title=f"Редактировать игру: {initial_game.name}", size=(500, 400))
+        super().__init__(parent, title=_("game.edit_game") + f": {initial_game.name}", size=(500, 400))
         self.language_manager = language_manager
         self.initial_game = initial_game  # Сохраняем исходный объект для сравнения ID
         self.updated_game_data = None
@@ -32,7 +33,7 @@ class EditGameDialog(wx.Dialog):
 
         # Название игры
         name_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        name_label = wx.StaticText(panel, label="Название игры:")
+        name_label = wx.StaticText(panel, label=_("dialogs.add_game.name") + ":")
         self.name_text = wx.TextCtrl(panel)
         name_sizer.Add(name_label, 0, wx.ALL | wx.CENTER, 5)
         name_sizer.Add(self.name_text, 1, wx.ALL | wx.EXPAND, 5)
@@ -40,7 +41,7 @@ class EditGameDialog(wx.Dialog):
 
         # Steam ID
         steam_id_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        steam_id_label = wx.StaticText(panel, label="Steam ID:")
+        steam_id_label = wx.StaticText(panel, label=_("dialogs.add_game.steam_id") + ":")
         self.steam_id_text = wx.TextCtrl(panel)
         steam_id_sizer.Add(steam_id_label, 0, wx.ALL | wx.CENTER, 5)
         steam_id_sizer.Add(self.steam_id_text, 1, wx.ALL | wx.EXPAND, 5)

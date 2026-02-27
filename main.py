@@ -49,9 +49,15 @@ class GameModManagerApp(wx.App):
         
         # Устанавливаем глобальный менеджер языков для i18n
         i18n.set_language_manager(self.language_manager)
+        
+        # Загружаем язык из настроек и применяем его
+        saved_language = self.settings_manager.get("language", "en")
+        print(f"[DEBUG] Loading language from settings: {saved_language}")
+        self.language_manager.set_language(saved_language)
+        print(f"[DEBUG] Current language after setting: {self.language_manager.get_current_language()}")
 
         # Создаем главное окно
-        frame = MainWindow()
+        frame = MainWindow(self.settings_manager, self.language_manager)
         frame.Show()
         return True
 

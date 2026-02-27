@@ -33,12 +33,19 @@ from src.ui.tabs.logs_tab import LogsTab
 class MainWindow(wx.Frame):
     """Главное окно приложения"""
 
-    def __init__(self):
+    def __init__(self, settings_manager=None, language_manager=None):
         super().__init__(None, title="GameModManager", size=(1200, 800))
+        
+        # Используем переданные менеджеры или создаем новые
+        self.settings_manager = settings_manager or SettingsManager()
+        self.language_manager = language_manager or LanguageManager()
+        
+        # Устанавливаем глобальный менеджер языков если он не был установлен
+        from src.core.i18n import i18n
+        if i18n._language_manager is None:
+            i18n.set_language_manager(self.language_manager)
 
         # Инициализация менеджеров
-        self.settings_manager = SettingsManager()
-        self.language_manager = LanguageManager()
         self.game_manager = GameManager()
         self.mod_manager = ModManager()
 
@@ -72,15 +79,8 @@ class MainWindow(wx.Frame):
         self._create_notebook_tabs()
 
     def _create_menu(self):
-        menubar = wx.MenuBar()
-        file_menu = wx.Menu()
-        settings_item = file_menu.Append(wx.ID_ANY, _("ui.settings") + "\tCtrl+,", _("ui.open_settings"))
-        self.Bind(wx.EVT_MENU, self._on_settings, settings_item)
-        file_menu.AppendSeparator()
-        exit_item = file_menu.Append(wx.ID_EXIT, _("ui.exit") + "\tCtrl+Q", _("ui.exit_app"))
-        self.Bind(wx.EVT_MENU, self._on_exit, exit_item)
-        menubar.Append(file_menu, _("ui.file"))
-        self.SetMenuBar(menubar)
+        # Меню убрано, так как все кнопки вынесены в основной интерфейс
+        pass
 
     def _create_game_selector_panel(self):
         self.game_selector_panel = wx.Panel(self)
@@ -89,9 +89,9 @@ class MainWindow(wx.Frame):
         self.game_choice.Bind(wx.EVT_CHOICE, self._on_game_selected)
         sizer.Add(self.game_choice, 1, wx.EXPAND | wx.ALL, 5)
 
-        add_game_btn = wx.Button(self.game_selector_panel, label=_("ui.add_game"))
-        add_game_btn.Bind(wx.EVT_BUTTON, self._on_add_game)
-        sizer.Add(add_game_btn, 0, wx.ALL, 5)
+        self.add_game_btn = wx.Button(self.game_selector_panel, label=_("ui.add_game"))
+        self.add_game_btn.Bind(wx.EVT_BUTTON, self._on_add_game)
+        sizer.Add(self.add_game_btn, 0, wx.ALL, 5)
 
         # --- НОВЫЕ КНОПКИ ---
         self.edit_game_btn = wx.Button(self.game_selector_panel, label=_("ui.edit_game"))
@@ -184,7 +184,7 @@ class MainWindow(wx.Frame):
                 self.mods_tab.set_game(None)
             if hasattr(self, 'browser_tab'):
                 self.browser_tab.set_game(None)
-            logger.debug("[MainWindow] Список игр пуст, UI сброшен.")
+            logger.debug("[MainWindow] " + _("system.game_list_empty"))
 
     # --- КОНЕЦ ИСПРАВЛЕННОГО _update_game_list ---
 
@@ -220,7 +220,7 @@ class MainWindow(wx.Frame):
                 self.mods_tab.set_game(self.current_game)
             if hasattr(self, 'browser_tab'):
                 self.browser_tab.set_game(self.current_game)
-            logger.info(f"[MainWindow] Выбрана игра: {self.current_game.name}")
+            logger.info("[MainWindow] " + _("system.game_selected", name=self.current_game.name))
         else:
             self.current_game = None
             self.launch_game_btn.Enable(False)

@@ -24,12 +24,13 @@ try:
     HAS_EVENT_BUS = True
 except ImportError:
     HAS_EVENT_BUS = False
-    logger.warning("event_bus не найден, будет использован внешний браузер")
+    logger.warning(_("system.event_bus_not_found") + ", " + _("system.external_browser_fallback"))
 # Импортируем новые сервисы
 from src.core.steam_workshop_service import SteamWorkshopService
 from src.core.task_manager import TaskManager
 # Импортируем HyperLinkCtrl для кликабельных ссылок
 import wx.lib.agw.hyperlink as hl
+from src.core.i18n import _
 
 class ModsTab(wx.Panel):
     """Вкладка установленных модов с вертикальным расположением панелей."""
@@ -252,7 +253,7 @@ class ModsTab(wx.Panel):
         self.enabled_panel.SetSizer(panel_sizer)
 
     def set_game(self, game: Optional[Game]):
-        logger.debug(f"[ModsTab] set_game вызван для {game.name if game else 'None'}")
+        logger.debug("[ModsTab] " + _("system.set_game_called", name=game.name if game else 'None'))
         self.current_game = game
         self.selected_mod_id = None
         self._clear_mod_info()
@@ -260,49 +261,49 @@ class ModsTab(wx.Panel):
         self._update_panel_titles(0, 0)
         if not game or not Path(game.mods_path).exists():
             if game and not Path(game.mods_path).exists():
-                logger.warning(f"[ModsTab] Папка модов не существует: {game.mods_path}")
+                logger.warning("[ModsTab] " + _("system.mods_folder_not_exists", path=game.mods_path))
             return
         self.task_manager.submit_task(self._load_mods_async_task, game.steam_id, description=f"{self.language_manager.get_text('mod.loading_mods')} {game.name}")
 
     def _load_mods_async_task(self, steam_id: str):
         try:
             if not self.current_game:
-                logger.error("[ModsTab/LoadAsync] current_game не установлен!")
+                logger.error("[ModsTab/LoadAsync] " + _("system.current_game_not_set"))
                 wx.CallAfter(wx.MessageBox, f"{self.language_manager.get_text('mod.error')}: {self.language_manager.get_text('mod.game_not_selected')}", self.language_manager.get_text("mod.error"), wx.OK | wx.ICON_ERROR)
                 return
-            logger.debug(f"[ModsTab/LoadAsync] Вызов load_mods_for_game для игры {self.current_game.name} (ID: {self.current_game.steam_id})")
+            logger.debug("[ModsTab/LoadAsync] " + _("system.loading_mods_for_game", name=self.current_game.name, id=self.current_game.steam_id))
             _ = self.mod_manager.load_mods_for_game(self.current_game)
             enabled_mods = self.mod_manager.get_enabled_mods(steam_id)
             disabled_mods = self.mod_manager.get_disabled_mods(steam_id)
             wx.CallAfter(self._on_mods_loaded, enabled_mods, disabled_mods)
             wx.CallAfter(self._update_panel_titles, len(enabled_mods), len(disabled_mods))
-            logger.info(f"[ModsTab] Загружено: {len(enabled_mods)} включённых, {len(disabled_mods)} отключённых модов.")
+            logger.info("[ModsTab] " + _("system.mods_loaded_count", enabled=len(enabled_mods), disabled=len(disabled_mods)))
         except Exception as e:
-            logger.error(f"[ModsTab/LoadAsync] Ошибка загрузки модов: {e}")
-            wx.CallAfter(wx.MessageBox, f"Ошибка загрузки списка модов: {e}", "Ошибка", wx.OK | wx.ICON_ERROR)
+            logger.error("[ModsTab/LoadAsync] " + _("system.mods_load_error", error=e))
+            wx.CallAfter(wx.MessageBox, _("system.mods_load_list_error", error=e), _("messages.error"), wx.OK | wx.ICON_ERROR)
 
     def _on_mods_loaded(self, enabled_mods: List[Mod], disabled_mods: List[Mod]):
         if not self: return
-        logger.debug("[ModsTab] _on_mods_loaded: Обновление списков UI.")
+        logger.debug("[ModsTab] _on_mods_loaded: " + _("system.updating_ui_lists"))
         try:
             self._clear_lists()
             for mod in disabled_mods:
                 self._add_mod_to_list(self.disabled_list, mod)
             for mod in enabled_mods:
                 self._add_mod_to_list(self.enabled_list, mod)
-            logger.debug("[ModsTab] _on_mods_loaded: Списки UI обновлены.")
+            logger.debug("[ModsTab] _on_mods_loaded: " + _("system.ui_lists_updated"))
             all_mods = enabled_mods + disabled_mods
             if all_mods:
-                self.task_manager.submit_task(self._load_mod_list_names_task, all_mods, description="Загрузка названий модов")
+                self.task_manager.submit_task(self._load_mod_list_names_task, all_mods, description=_("system.loading_mod_names"))
         except Exception as e:
-            logger.error(f"[ModsTab/OnLoaded] Ошибка обновления UI: {e}")
+            logger.error("[ModsTab/OnLoaded] " + _("system.ui_update_error", error=e))
 
     def _add_mod_to_list(self, list_ctrl: wx.ListCtrl, mod: Mod):
         if not self: return
         try:
             details = self.mod_details.get(mod.mod_id, {})
             title = details.get('title', mod.mod_id)
-            display_name = title if title != mod.mod_id else f"Мод ({mod.mod_id})"
+            display_name = title if title != mod.mod_id else _("mod.mod_display_name", mod_id=mod.mod_id)
             
             # Используем новые свойства мода для правильного отображения
             install_date = mod.formatted_install_date
@@ -317,7 +318,7 @@ class ModsTab(wx.Panel):
             list_ctrl.SetItem(index, self.COL_UPDATE, updated_date)
             list_ctrl.SetItem(index, self.COL_SIZE, file_size)
         except Exception as e:
-            logger.error(f"[ModsTab/AddToList] Ошибка добавления мода {mod.mod_id} в список: {e}")
+            logger.error("[ModsTab/AddToList] " + _("mod.mod_add_to_list_error", mod_id=mod.mod_id, error=e))
 
     def _load_mod_list_names_task(self, mod_list: List[Mod]):
         if not self: return
@@ -344,23 +345,23 @@ class ModsTab(wx.Panel):
         mods_to_load = [mod for mod in mod_list if mod.mod_id not in cached_mods]
         
         if mods_to_load:
-            logger.info(f"[ModsTab/ListNames] Нужно загрузить {len(mods_to_load)} модов из {total}")
+            logger.info("[ModsTab/ListNames] " + _("mod.mods_to_load_count", count=len(mods_to_load), total=total))
             if self.names_total > 0:
                 wx.CallAfter(self._show_names_loading_dialog, self.names_total)
             
             for mod in mods_to_load:
                 with self.loading_lock:
                     if self.names_aborted:
-                        logger.info("[ModsTab/Names] Загрузка названий прервана пользователем (внутри цикла).")
+                        logger.info("[ModsTab/Names] " + _("mod.names_loading_aborted_user"))
                         wx.CallAfter(self._hide_names_loading_dialog)
                         return
                 self.task_manager.submit_task(
                     self._load_single_mod_name_task,
                     mod,
-                    description=f"Загрузка названия мода {mod.mod_id}"
+                    description=_("mod.loading_mod_name", mod_id=mod.mod_id)
                 )
         else:
-            logger.info(f"[ModsTab/ListNames] Все {total} модов уже в кэше")
+            logger.info("[ModsTab/ListNames] " + _("mod.all_mods_cached", total=total))
             wx.CallAfter(self._hide_names_loading_dialog)
 
     def _load_single_mod_name_task(self, mod: Mod):
@@ -390,14 +391,14 @@ class ModsTab(wx.Panel):
                     self.mod_details[mod.mod_id] = details
                     wx.CallAfter(self._refresh_single_mod_in_lists, mod.mod_id)
                 else:
-                    logger.warning(f"[ModsTab/ListName/Task] [{mod.mod_id}] Не удалось получить данные.")
+                    logger.warning("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_data_fetch_failed_log"))
                     details = {'title': mod.mod_id, 'author': 'Ошибка', 'description': 'Ошибка загрузки', 'tags': [], 'dependencies': []}
             except requests.RequestException as e:
-                logger.warning(f"[ModsTab/ListName/Task] [{mod.mod_id}] Сетевая ошибка: {e}")
-                details = {'title': mod.mod_id, 'author': 'Ошибка сети', 'description': str(e), 'tags': [], 'dependencies': []}
+                logger.warning("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_network_error_log") + f": {e}")
+                details = {'title': mod.mod_id, 'author': _("mod.mod_network_error_log"), 'description': str(e), 'tags': [], 'dependencies': []}
             except Exception as e:
-                logger.error(f"[ModsTab/ListName/Task] [{mod.mod_id}] Ошибка: {e}")
-                details = {'title': mod.mod_id, 'author': 'Ошибка', 'description': str(e), 'tags': [], 'dependencies': []}
+                logger.error("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_loading_error_log") + f": {e}")
+                details = {'title': mod.mod_id, 'author': _("mod.mod_loading_error_log"), 'description': str(e), 'tags': [], 'dependencies': []}
             finally:
                 with self.loading_lock:
                     if self.names_aborted:
@@ -406,7 +407,7 @@ class ModsTab(wx.Panel):
                     current = self.names_loaded
                     total = self.names_total
                     aborted = self.names_aborted
-                logger.info(f"[ModsTab/ListName/Task] [{mod.mod_id}] Обработка завершена ({current}/{total})")
+                logger.info("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_processing_finished_log", current=current, total=total))
                 if not aborted:
                     wx.CallAfter(self._update_names_loading_dialog, current, total, mod.mod_id)
                 else:
@@ -419,7 +420,7 @@ class ModsTab(wx.Panel):
             title = details.get('title', mod_id)
             self._update_mod_name_in_lists(mod_id, title)
         except Exception as e:
-            logger.error(f"[ModsTab/Refresh] Ошибка обновления мода {mod_id}: {e}")
+            logger.error("[ModsTab/Refresh] " + _("mod.mod_refresh_error_log", mod_id=mod_id, error=e))
 
     def _update_mod_name_in_lists(self, mod_id: str, title: str):
         """Обновляет название мода в обоих списках"""
@@ -438,7 +439,7 @@ class ModsTab(wx.Panel):
                     self.disabled_list.SetItem(item, self.COL_NAME, title)
                     
         except Exception as e:
-            logger.error(f"[ModsTab/UpdateName] Ошибка обновления названия {mod_id}: {e}")
+            logger.error("[ModsTab/UpdateName] " + _("mod.mod_update_name_error_log", mod_id=mod_id, error=e))
 
     def _find_mod_in_list(self, list_ctrl: wx.ListCtrl, mod_id: str) -> int:
         """Находит индекс мода в списке по ID"""
@@ -449,11 +450,11 @@ class ModsTab(wx.Panel):
                 if item_mod_id == mod_id:
                     return i
         except Exception as e:
-            logger.error(f"[ModsTab/FindMod] Ошибка поиска мода {mod_id}: {e}")
+            logger.error("[ModsTab/FindMod] " + _("mod.mod_find_error_log", mod_id=mod_id, error=e))
         return -1
 
     def _display_mod_info(self, mod_id: str, details: Dict[str, Any]):
-        logger.debug(f"[ModsTab/DisplayInfo] Отображение информации для {mod_id}: {details}")
+        logger.debug("[ModsTab/DisplayInfo] " + _("mod.mod_displaying_info_log", mod_id=mod_id))
         if not self or mod_id != self.selected_mod_id:
             return
         
@@ -470,8 +471,8 @@ class ModsTab(wx.Panel):
             tags = details.get('tags', [])
             dependencies = details.get('dependencies', [])
             
-            logger.debug(f"[ModsTab/DisplayInfo] Зависимости мода {mod_id}: {dependencies}")
-            logger.info(f"[ModsTab/DisplayInfo] Мод {mod_id} имеет {len(dependencies)} зависимостей")
+            logger.debug("[ModsTab/DisplayInfo] " + _("mod.mod_dependencies_debug", mod_id=mod_id, dependencies=dependencies))
+            logger.info("[ModsTab/DisplayInfo] " + _("mod.mod_has_deps_info", mod_id=mod_id, count=len(dependencies)))
             
             # Используем данные из Steam если доступны, иначе из объекта мода
             steam_updated_date = None
@@ -481,9 +482,9 @@ class ModsTab(wx.Panel):
                 steam_updated_date = details.get('updated_date')
                 steam_file_size = details.get('file_size')
                 if steam_updated_date:
-                    logger.debug(f"[ModsTab/DisplayInfo] Steam дата обновления для {mod_id}: {steam_updated_date}")
+                    logger.debug("[ModsTab/DisplayInfo] " + _("mod.mod_steam_update_debug", mod_id=mod_id, date=steam_updated_date))
                 if steam_file_size:
-                    logger.debug(f"[ModsTab/DisplayInfo] Steam размер для {mod_id}: {steam_file_size} байт")
+                    logger.debug("[ModsTab/DisplayInfo] " + _("mod.mod_steam_size_debug", mod_id=mod_id, size=steam_file_size))
             
             # Используем данные из объекта мода, если доступны
             if mod_obj:
@@ -505,7 +506,7 @@ class ModsTab(wx.Panel):
                             break
                         size /= 1024.0
                     else:
-                        file_size = f"{size:.1f} ТБ"
+                        file_size = _("mod.mod_tb_size", size=size)
                 else:
                     file_size = mod_obj.formatted_file_size
             else:
@@ -526,9 +527,9 @@ class ModsTab(wx.Panel):
                             break
                         size /= 1024.0
                     else:
-                        file_size = f"{size:.1f} ТБ"
+                        file_size = _("mod.mod_tb_size", size=size)
                 else:
-                    file_size = version_info.get('file_size', 'Неизвестно')
+                    file_size = version_info.get('file_size', _("mod.mod_unknown_size"))
                     
                 local_update_date = version_info.get('local_update_date', 'Неизвестно')
             
@@ -571,9 +572,9 @@ class ModsTab(wx.Panel):
                     try:
                         installed_mods: List[Mod] = self.mod_manager.get_installed_mods(self.current_game.steam_id)
                         installed_mod_ids = {m.mod_id for m in installed_mods}
-                        logger.info(f"[ModsTab/DisplayInfo] Установленные моды: {list(installed_mod_ids)[:5]}... (всего {len(installed_mod_ids)})")
+                        logger.info("[ModsTab/DisplayInfo] " + _("mod.mod_installed_list_debug", list=list(installed_mod_ids)[:5], total=len(installed_mod_ids)))
                     except Exception as e:
-                        logger.error(f"[ModsTab/DisplayInfo] Ошибка получения списка установленных модов: {e}")
+                        logger.error("[ModsTab/DisplayInfo] " + _("mod.mod_installed_error_debug", error=e))
                         installed_mod_ids = set()
                 
                 if dependencies:
@@ -589,23 +590,23 @@ class ModsTab(wx.Panel):
                             dep_name = dep_details['title']
                         
                         # Временное логирование для отладки
-                        logger.info(f"[ModsTab/DisplayInfo] Зависимость: {dep_id} ({dep_name}) - {'УСТАНОВЛЕН' if dep_id in installed_mod_ids else 'НЕ УСТАНОВЛЕН'}")
+                        logger.info("[ModsTab/DisplayInfo] " + _("mod.mod_dependency_debug", dep_id=dep_id, name=dep_name, status=_("mod.dependency_installed") if dep_id in installed_mod_ids else _("mod.dependency_not_installed")))
                         
                         if dep_id in installed_mod_ids:
                             dep_link = hl.HyperLinkCtrl(self.mod_deps_panel, id=wx.ID_ANY, label=dep_name, URL="")
-                            dep_link.SetToolTip(f"ID: {dep_id}\nУстановлен - кликните для выделения в списке")
-                            logger.info(f"[ModsTab/DisplayInfo] Создание гиперссылки для установленной зависимости: {dep_id} ({dep_name})")
+                            dep_link.SetToolTip(_("mod.mod_dep_installed_tooltip_text", dep_id=dep_id))
+                            logger.info("[ModsTab/DisplayInfo] " + _("mod.mod_dep_link_created_log", dep_id=dep_id, name=dep_name))
                             # Пробуем использовать EVT_LEFT_UP вместо EVT_HYPERLINK_LEFT
                             dep_link.Bind(wx.EVT_LEFT_UP, lambda evt, mid=dep_id: self._on_dependency_click(mid))
-                            logger.info(f"[ModsTab/DisplayInfo] Привязано событие клика для зависимости: {dep_id}")
+                            logger.info("[ModsTab/DisplayInfo] " + _("mod.mod_dep_event_bound", dep_id=dep_id))
                             dep_sizer.Add(dep_link, 0, wx.ALIGN_CENTER_VERTICAL)
                         else:
                             dep_id_text = wx.StaticText(self.mod_deps_panel, label=f"{dep_name} ({dep_id})")
-                            dep_id_text.SetToolTip(f"ID: {dep_id}\nНе установлен - кликните для открытия в браузере")
-                            logger.info(f"[ModsTab/DisplayInfo] Создание текста для неустановленной зависимости: {dep_id} ({dep_name})")
+                            dep_id_text.SetToolTip(_("mod.mod_dep_not_installed_tooltip", dep_id=dep_id))
+                            logger.info("[ModsTab/DisplayInfo] " + _("mod.mod_dep_text_created", dep_id=dep_id, name=dep_name))
                             # Делаем текст кликабельным для неустановленных зависимостей
                             dep_id_text.Bind(wx.EVT_LEFT_UP, lambda evt, mid=dep_id: self._on_dependency_click(mid))
-                            logger.info(f"[ModsTab/DisplayInfo] Привязано событие клика для неустановленной зависимости: {dep_id}")
+                            logger.info("[ModsTab/DisplayInfo] " + _("mod.mod_dep_event_bound_not_installed", dep_id=dep_id))
                             dep_sizer.Add(dep_id_text, 0, wx.ALIGN_CENTER_VERTICAL)
                         self.mod_deps_sizer.Add(dep_sizer, 0, wx.EXPAND | wx.ALL, 1)
                 else:
@@ -700,7 +701,7 @@ class ModsTab(wx.Panel):
                 sample_ids = [self.disabled_list.GetItemText(i, self.COL_ID) for i in range(min(3, self.disabled_list.GetItemCount()))]
                 logger.info(f"[ModsTab/SelectByID] Примеры ID в disabled_list: {sample_ids}")
             
-            wx.MessageBox(f"Мод с ID {mod_id} не найден в списке установленных модов.", "Не найден", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(_("system.mod_not_found", mod_id=mod_id), _("messages.not_found"), wx.OK | wx.ICON_INFORMATION)
 
     def _highlight_all_dependencies(self, dependencies: List[str], installed_mod_ids: Set[str]):
         """Подсвечивает все установленные зависимости в списках"""
@@ -1123,16 +1124,16 @@ class ModsTab(wx.Panel):
                 for mod_id in mod_ids:
                     self._refresh_single_mod_in_lists_after_action(mod_id, "disable")
         def on_menu_remove(event):
-            res = wx.MessageBox(f"Вы уверены, что хотите удалить {len(mod_ids)} мод(ов)?", "Подтверждение", wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
+            res = wx.MessageBox(_("system.confirm_remove_multiple", count=len(mod_ids)), _("messages.confirmation"), wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
             if res == wx.YES:
                 for mod_id in mod_ids:
                     success = self._remove_mod(mod_id)
                     if success:
                         self._remove_mod_from_lists(mod_id)
         def on_menu_update(event):
-            wx.MessageBox("Функция обновления мода пока не реализована.", "В разработке", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(_("system.function_not_implemented", function=_("mod.update")), _("messages.in_development"), wx.OK | wx.ICON_INFORMATION)
         def on_menu_check_update(event):
-            wx.MessageBox("Функция проверки обновления мода пока не реализована.", "В разработке", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(_("system.function_not_implemented", function=_("mod.check_update")), _("messages.in_development"), wx.OK | wx.ICON_INFORMATION)
         menu.Bind(wx.EVT_MENU, on_menu_open, open_item)
         menu.Bind(wx.EVT_MENU, on_menu_enable, enable_item)
         menu.Bind(wx.EVT_MENU, on_menu_disable, disable_item)
@@ -1268,7 +1269,7 @@ class ModsTab(wx.Panel):
     def _on_check_updates(self, event):
         """Проверка обновлений с использованием локальных данных и Steam"""
         if not self.current_game:
-            wx.MessageBox("Сначала выберите игру.", "Ошибка", wx.OK | wx.ICON_WARNING)
+            wx.MessageBox(_("system.select_game_first"), _("messages.error"), wx.OK | wx.ICON_WARNING)
             return
         
         # Показываем диалог прогресса
@@ -1371,7 +1372,7 @@ class ModsTab(wx.Panel):
 
     def _on_update_all_mods(self, event):
         """Обновление всех модов (пока просто проверка)"""
-        wx.MessageBox("Функция обновления всех модов пока не реализована.\nИспользуйте 'Проверить обновления' для обновления данных.", "В разработке", wx.OK | wx.ICON_INFORMATION)
+        wx.MessageBox(_("system.update_all_not_implemented"), _("messages.in_development"), wx.OK | wx.ICON_INFORMATION)
 
     def _refresh_all_mod_data(self, results: Dict[str, bool]):
         """Обновляет данные всех модов после проверки"""
@@ -1407,7 +1408,7 @@ class ModsTab(wx.Panel):
             except Exception as e:
                 success = False
                 logger.error(f"[ModsTab/Enable] [{mod_id}] Ошибка: {e}")
-                wx.MessageBox(f"Ошибка включения мода {mod_id}: {e}", "Ошибка", wx.OK | wx.ICON_ERROR)
+                wx.MessageBox(_("system.enable_mod_error", mod_id=mod_id, error=e), _("messages.error"), wx.OK | wx.ICON_ERROR)
         return success
 
     def _disable_mod(self, mod_ids: List[str]) -> bool:
@@ -1423,7 +1424,7 @@ class ModsTab(wx.Panel):
             except Exception as e:
                 success = False
                 logger.error(f"[ModsTab/Disable] [{mod_id}] Ошибка: {e}")
-                wx.MessageBox(f"Ошибка отключения мода {mod_id}: {e}", "Ошибка", wx.OK | wx.ICON_ERROR)
+                wx.MessageBox(_("system.disable_mod_error", mod_id=mod_id, error=e), _("messages.error"), wx.OK | wx.ICON_ERROR)
         return success
 
     def _remove_mod(self, mod_id: str) -> bool:
@@ -1440,7 +1441,7 @@ class ModsTab(wx.Panel):
             return success
         except Exception as e:
             logger.error(f"[ModsTab/Remove] [{mod_id}] Ошибка: {e}")
-            wx.MessageBox(f"Ошибка удаления мода {mod_id}: {e}", "Ошибка", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(_("system.remove_mod_error", mod_id=mod_id, error=e), _("messages.error"), wx.OK | wx.ICON_ERROR)
             return False
 
     def _load_mod_versions(self):

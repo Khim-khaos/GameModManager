@@ -19,7 +19,7 @@ try:
     HAS_EVENT_BUS = True
 except ImportError:
     HAS_EVENT_BUS = False
-    logger.warning("event_bus не найден")
+    logger.warning(_("system.event_bus_not_found"))
 
 # --- Добавляем импорт новых диалогов ---
 from src.ui.dialogs.download_progress_dialog import DownloadProgressDialog
@@ -127,6 +127,46 @@ class BrowserTab(wx.Panel):
 
     # --- КОНЕЦ ОБНОВЛЕННОГО _update_queue_list ---
 
+    def _update_ui_texts(self):
+        """Обновляет все тексты в UI при смене языка"""
+        # Обновляем заголовок очереди
+        if hasattr(self, 'queue_title'):
+            queue = self.download_manager.download_queue
+            self.queue_title.SetLabel(_("browser.download_queue_title", count=len(queue)))
+        
+        # Обновляем кнопки очереди
+        if hasattr(self, 'export_btn'):
+            self.export_btn.SetLabel(_("browser.export"))
+        if hasattr(self, 'import_btn'):
+            self.import_btn.SetLabel(_("browser.import"))
+        if hasattr(self, 'clear_queue_btn'):
+            self.clear_queue_btn.SetLabel(_("browser.clear"))
+        if hasattr(self, 'remove_from_queue_btn'):
+            self.remove_from_queue_btn.SetLabel(_("browser.remove_from_queue"))
+        if hasattr(self, 'download_btn'):
+            self.download_btn.SetLabel(_("browser.download"))
+        
+        # Обновляем навигационные кнопки
+        if hasattr(self, 'back_btn'):
+            self.back_btn.SetLabel(_("browser.back"))
+        if hasattr(self, 'forward_btn'):
+            self.forward_btn.SetLabel(_("browser.forward"))
+        if hasattr(self, 'refresh_btn'):
+            self.refresh_btn.SetLabel(_("browser.refresh"))
+        
+        # Обновляем кнопки добавления
+        if hasattr(self, 'add_to_queue_btn'):
+            self.add_to_queue_btn.SetLabel(_("browser.add_to_queue"))
+        if hasattr(self, 'add_collection_btn'):
+            self.add_collection_btn.SetLabel(_("browser.add_collection"))
+        
+        # Обновляем колонки списка
+        if hasattr(self, 'queue_list'):
+            self.queue_list.ClearAll()
+            self.queue_list.AppendColumn(_("mod.name"), width=200)
+            self.queue_list.AppendColumn(_("mod.id"), width=150)
+            self._update_queue_list()  # Пересобрать список с новыми заголовками
+
     def _create_browser_panel(self, parent):
         # Теперь parent - это splitter
         self.browser_panel = wx.Panel(parent) # <-- Сохраняем ссылку на панель
@@ -158,11 +198,11 @@ class BrowserTab(wx.Panel):
         self.progress.Hide()
         browser_sizer.Add(self.progress, 0, wx.ALL | wx.EXPAND, 5)
         buttons_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.add_to_queue_btn = wx.Button(self.browser_panel, label="Добавить в очередь")
+        self.add_to_queue_btn = wx.Button(self.browser_panel, label=_("browser.add_to_queue"))
         self.add_to_queue_btn.Bind(wx.EVT_BUTTON, self._on_add_to_queue)
         self.add_to_queue_btn.Enable(False)
         buttons_sizer.Add(self.add_to_queue_btn, 0, wx.ALL, 5)
-        self.add_collection_btn = wx.Button(self.browser_panel, label="Добавить коллекцию")
+        self.add_collection_btn = wx.Button(self.browser_panel, label=_("browser.add_collection"))
         self.add_collection_btn.Bind(wx.EVT_BUTTON, self._on_add_collection_clicked) # <-- Исправлено имя метода
         self.add_collection_btn.Enable(True)
         buttons_sizer.Add(self.add_collection_btn, 0, wx.ALL, 5)
@@ -279,7 +319,7 @@ class BrowserTab(wx.Panel):
     def _quick_add_mod_to_queue(self, mod_id):
         """Быстро добавляет мод в очередь с проверкой зависимостей."""
         if not self.current_game:
-            wx.CallAfter(lambda: wx.MessageBox("Сначала выберите игру", "Ошибка", wx.OK | wx.ICON_WARNING))
+            wx.CallAfter(lambda: wx.MessageBox(_("messages.select_game_first"), _("messages.error"), wx.OK | wx.ICON_WARNING))
             return
             
         # Проверяем, нет ли уже в очереди
@@ -322,12 +362,12 @@ class BrowserTab(wx.Panel):
                 logger.info(f"[Browser/QuickAdd] Мод '{mod_name}' ({mod_id}) найден. Зависимости: {dependencies}")
             else:
                 logger.error(f"[Browser/QuickAdd] Ошибка запроса страницы мода: {response.status_code}")
-                wx.CallAfter(lambda: wx.MessageBox("Не удалось получить информацию о моде", "Ошибка", wx.OK | wx.ICON_ERROR))
+                wx.CallAfter(lambda: wx.MessageBox(_("messages.mod_info_error"), _("messages.error"), wx.OK | wx.ICON_ERROR))
                 return
                 
         except Exception as e:
             logger.error(f"[Browser/QuickAdd] Ошибка при парсинге страницы мода: {e}")
-            wx.CallAfter(lambda: wx.MessageBox("Ошибка при получении данных мода", "Ошибка", wx.OK | wx.ICON_ERROR))
+            wx.CallAfter(lambda: wx.MessageBox(_("messages.mod_data_error"), _("messages.error"), wx.OK | wx.ICON_ERROR))
             return
 
         # Импортируем необходимые классы
