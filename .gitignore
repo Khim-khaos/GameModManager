@@ -183,3 +183,7 @@ cython_debug/
 /.vscode
 *__init__.py
 /src/data
+src/data/games.json
+src/data/config.py
+src/data/games.json
+src/data/settings.json
