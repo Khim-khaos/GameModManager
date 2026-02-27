@@ -123,9 +123,12 @@ class ModManager:
 
         try:
             install_date = datetime.fromtimestamp(os.path.getctime(path))
+            # Добавляем локальную дату обновления (время последнего изменения папки)
+            local_update_date = datetime.fromtimestamp(os.path.getmtime(path))
         except (OSError, ValueError, OverflowError) as e: # Расширяем обработку ошибок
             logger.warning(f"[ModManager/_create_mod] Не удалось получить дату создания для папки '{path}' (ID: {mod_id}): {e}. Установлена None.")
             install_date = None
+            local_update_date = None
 
         mod = Mod(
             mod_id=mod_id,
@@ -134,7 +137,8 @@ class ModManager:
             local_path=path,
             is_enabled=is_enabled,
             workshop_url=f"https://steamcommunity.com/sharedfiles/filedetails/?id={mod_id}",
-            install_date=install_date
+            install_date=install_date,
+            local_update_date=local_update_date
         )
         logger.debug(f"[ModManager/_create_mod] Создан объект Mod: ID={mod.mod_id}, Включен={mod.is_enabled}, Путь={mod.local_path}")
         return mod

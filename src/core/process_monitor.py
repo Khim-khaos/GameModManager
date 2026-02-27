@@ -9,8 +9,8 @@ import psutil
 from typing import Dict, List, Optional, Set
 from dataclasses import dataclass, asdict
 from loguru import logger
-from src.constants import CACHE_FILE
-
+from src.data.config import PROCESS_CACHE_FILE
+from src.core.i18n import _
 
 @dataclass
 class CacheEntry:
@@ -78,7 +78,7 @@ class CacheManager:
     """Менеджер кэша для данных Steam"""
     
     def __init__(self, cache_file: str = None):
-        self.cache_file = cache_file or CACHE_FILE
+        self.cache_file = cache_file or PROCESS_CACHE_FILE
         self._cache: Dict[str, CacheEntry] = {}
         self._load_cache()
     
@@ -96,7 +96,7 @@ class CacheManager:
                         )
                         for key, entry in data.items()
                     }
-                logger.debug(f"Загружен кэш: {len(self._cache)} записей")
+                logger.debug(_("system.cache_loaded", count=len(self._cache)))
             else:
                 self._cache = {}
         except Exception as e:
