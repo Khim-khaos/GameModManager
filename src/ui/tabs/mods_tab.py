@@ -6,6 +6,7 @@ import re
 import wx
 import threading
 import json
+import time
 from pathlib import Path
 from loguru import logger
 from typing import List, Dict, Optional, Any, Set
@@ -62,7 +63,9 @@ class ModsTab(wx.Panel):
         self.names_total = 0
         self.names_loaded = 0
         self.names_aborted = False
-        self.names_semaphore = threading.Semaphore(5)
+        self.names_semaphore = threading.Semaphore(2)  # Уменьшил с 5 до 2 для меньшей нагрузки
+        self.highlighted_item = None  # Для временного выделения зависимостей
+        self.highlighted_list = None  # Список с выделенным элементом
         self.sort_col_enabled = self.COL_NAME
         self.sort_asc_enabled = True
         self.sort_col_disabled = self.COL_NAME
@@ -308,9 +311,31 @@ class ModsTab(wx.Panel):
         self.names_total = len(mod_list)
         self.names_loaded = 0
         self.names_aborted = False
-        if self.names_total > 0:
-            wx.CallAfter(self._show_names_loading_dialog, self.names_total)
-            for mod in mod_list:
+        
+        # Проверяем, какие моды уже есть в кэше
+        mod_ids = [mod.mod_id for mod in mod_list]
+        cached_mods = self.steam_workshop_service.get_cached_mods(mod_ids)
+        
+        # Сразу обновляем интерфейс для модов из кэша
+        for mod in mod_list:
+            if mod.mod_id in cached_mods:
+                cached_data = cached_mods[mod.mod_id]
+                self.mod_details[mod.mod_id] = cached_data
+                # Обновляем название в списках
+                self._update_mod_name_in_lists(mod.mod_id, cached_data.get('title', mod.mod_id))
+                self.names_loaded += 1
+        
+        # Обновляем счетчик
+        current = self.names_loaded
+        total = self.names_total
+        mods_to_load = [mod for mod in mod_list if mod.mod_id not in cached_mods]
+        
+        if mods_to_load:
+            logger.info(f"[ModsTab/ListNames] Нужно загрузить {len(mods_to_load)} модов из {total}")
+            if self.names_total > 0:
+                wx.CallAfter(self._show_names_loading_dialog, self.names_total)
+            
+            for mod in mods_to_load:
                 with self.loading_lock:
                     if self.names_aborted:
                         logger.info("[ModsTab/Names] Загрузка названий прервана пользователем (внутри цикла).")
@@ -321,6 +346,9 @@ class ModsTab(wx.Panel):
                     mod,
                     description=f"Загрузка названия мода {mod.mod_id}"
                 )
+        else:
+            logger.info(f"[ModsTab/ListNames] Все {total} модов уже в кэше")
+            wx.CallAfter(self._hide_names_loading_dialog)
 
     def _load_single_mod_name_task(self, mod: Mod):
         with self.names_semaphore:
@@ -338,6 +366,10 @@ class ModsTab(wx.Panel):
                         total = self.names_total
                     wx.CallAfter(self._update_names_loading_dialog, current, total, mod.mod_id)
                     return
+                
+                # Небольшая задержка между запросами для снижения нагрузки
+                time.sleep(0.5)
+                
                 details = self.steam_workshop_service.get_mod_details(mod.mod_id)
                 if details:
                     details.setdefault('tags', [])
@@ -371,15 +403,41 @@ class ModsTab(wx.Panel):
         if not self: return
         try:
             details = self.mod_details.get(mod_id, {})
-            display_name = details.get('title', mod_id)
-            for list_ctrl in [self.disabled_list, self.enabled_list]:
-                item_index = self._find_mod_item_index_by_id(list_ctrl, mod_id)
-                if item_index != wx.NOT_FOUND:
-                    list_ctrl.SetItem(item_index, self.COL_NAME, display_name)
-            if self.selected_mod_id == mod_id:
-                wx.CallAfter(self._display_mod_info, mod_id, details)
+            title = details.get('title', mod_id)
+            self._update_mod_name_in_lists(mod_id, title)
         except Exception as e:
-            logger.error(f"[ModsTab/RefreshSingle] Ошибка обновления мода {mod_id} в списках: {e}")
+            logger.error(f"[ModsTab/Refresh] Ошибка обновления мода {mod_id}: {e}")
+
+    def _update_mod_name_in_lists(self, mod_id: str, title: str):
+        """Обновляет название мода в обоих списках"""
+        if not self: return
+        try:
+            # Обновляем в списке включенных модов
+            if self.enabled_list:
+                item = self._find_mod_in_list(self.enabled_list, mod_id)
+                if item != -1:
+                    self.enabled_list.SetItem(item, self.COL_NAME, title)
+            
+            # Обновляем в списке отключенных модов
+            if self.disabled_list:
+                item = self._find_mod_in_list(self.disabled_list, mod_id)
+                if item != -1:
+                    self.disabled_list.SetItem(item, self.COL_NAME, title)
+                    
+        except Exception as e:
+            logger.error(f"[ModsTab/UpdateName] Ошибка обновления названия {mod_id}: {e}")
+
+    def _find_mod_in_list(self, list_ctrl: wx.ListCtrl, mod_id: str) -> int:
+        """Находит индекс мода в списке по ID"""
+        if not list_ctrl: return -1
+        try:
+            for i in range(list_ctrl.GetItemCount()):
+                item_mod_id = list_ctrl.GetItem(i, self.COL_ID).GetText()
+                if item_mod_id == mod_id:
+                    return i
+        except Exception as e:
+            logger.error(f"[ModsTab/FindMod] Ошибка поиска мода {mod_id}: {e}")
+        return -1
 
     def _display_mod_info(self, mod_id: str, details: Dict[str, Any]):
         logger.debug(f"[ModsTab/DisplayInfo] Отображение информации для {mod_id}: {details}")
@@ -454,13 +512,23 @@ class ModsTab(wx.Panel):
                         dep_sizer = wx.BoxSizer(wx.HORIZONTAL)
                         dep_status_text = wx.StaticText(self.mod_deps_panel, label="[Установлен] " if dep_id in installed_mod_ids else "[Не установлен] ")
                         dep_sizer.Add(dep_status_text, 0, wx.ALIGN_CENTER_VERTICAL)
+                        
+                        # Получаем название зависимости из кэша
+                        dep_name = dep_id  # По умолчанию используем ID
+                        dep_details = self.steam_workshop_service.get_mod_details(dep_id)
+                        if dep_details and dep_details.get('title'):
+                            dep_name = dep_details['title']
+                        
                         if dep_id in installed_mod_ids:
-                            dep_link = hl.HyperLinkCtrl(self.mod_deps_panel, id=wx.ID_ANY, label=dep_id, URL="")
-                            dep_link.SetToolTip("Кликните, чтобы перейти к моду")
+                            dep_link = hl.HyperLinkCtrl(self.mod_deps_panel, id=wx.ID_ANY, label=dep_name, URL="")
+                            dep_link.SetToolTip(f"ID: {dep_id}\nУстановлен - кликните для выделения в списке")
                             dep_link.Bind(hl.EVT_HYPERLINK_LEFT, lambda evt, mid=dep_id: self._on_dependency_click(mid))
                             dep_sizer.Add(dep_link, 0, wx.ALIGN_CENTER_VERTICAL)
                         else:
-                            dep_id_text = wx.StaticText(self.mod_deps_panel, label=dep_id)
+                            dep_id_text = wx.StaticText(self.mod_deps_panel, label=f"{dep_name} ({dep_id})")
+                            dep_id_text.SetToolTip(f"ID: {dep_id}\nНе установлен - кликните для открытия в браузере")
+                            # Делаем текст кликабельным для неустановленных зависимостей
+                            dep_id_text.Bind(wx.EVT_LEFT_UP, lambda evt, mid=dep_id: self._on_dependency_click(mid))
                             dep_sizer.Add(dep_id_text, 0, wx.ALIGN_CENTER_VERTICAL)
                         self.mod_deps_sizer.Add(dep_sizer, 0, wx.EXPAND | wx.ALL, 1)
                 else:
@@ -492,13 +560,29 @@ class ModsTab(wx.Panel):
 
     def _on_dependency_click(self, mod_id: str):
         logger.debug(f"[ModsTab/DepClick] Клик по зависимости {mod_id}")
-        self._select_mod_by_id(mod_id)
+        
+        # Проверяем, установлен ли мод
+        installed_mods = self.mod_manager.get_installed_mods(self.current_game.steam_id)
+        installed_mod_ids = {m.mod_id for m in installed_mods}
+        
+        if mod_id in installed_mod_ids:
+            # Установленная зависимость - выделяем в списке
+            logger.debug(f"[ModsTab/DepClick] Зависимость {mod_id} установлена, выделяем в списке")
+            self._select_mod_by_id(mod_id)
+        else:
+            # Неустановленная зависимость - открываем в браузере приложения
+            logger.debug(f"[ModsTab/DepClick] Зависимость {mod_id} не установлена, открываем в браузере")
+            self._open_mod_in_browser(mod_id)
 
     def _select_mod_by_id(self, mod_id: str):
         if not mod_id or not self.current_game:
             return
         logger.debug(f"[ModsTab/SelectByID] Попытка выделить мод {mod_id}")
         found = False
+        
+        # Сначала убираем предыдущее выделение зависимостей
+        self._clear_dependency_highlight()
+        
         for list_ctrl in [self.disabled_list, self.enabled_list]:
             item_index = self._find_mod_item_index_by_id(list_ctrl, mod_id)
             if item_index != wx.NOT_FOUND:
@@ -507,6 +591,10 @@ class ModsTab(wx.Panel):
                 list_ctrl.Select(item_index, on=True)
                 list_ctrl.EnsureVisible(item_index)
                 list_ctrl.SetFocus()
+                
+                # Временное выделение зеленым цветом
+                self._highlight_dependency(list_ctrl, item_index)
+                
                 event = wx.ListEvent(wx.wxEVT_LIST_ITEM_SELECTED, list_ctrl.GetId())
                 event.m_itemIndex = item_index
                 event.SetEventObject(list_ctrl)
@@ -517,6 +605,41 @@ class ModsTab(wx.Panel):
         if not found:
             logger.warning(f"[ModsTab/SelectByID] Мод {mod_id} не найден ни в одном списке.")
             wx.MessageBox(f"Мод с ID {mod_id} не найден в списке установленных модов.", "Не найден", wx.OK | wx.ICON_INFORMATION)
+
+    def _highlight_dependency(self, list_ctrl: wx.ListCtrl, item_index: int):
+        """Временно выделяет мод зеленым цветом как зависимость"""
+        if not list_ctrl or item_index == wx.NOT_FOUND:
+            return
+        
+        # Сохраняем информацию о выделении
+        self.highlighted_list = list_ctrl
+        self.highlighted_item = item_index
+        
+        # Устанавливаем зеленый фон для элемента
+        item = wx.ListViewItem()
+        item.SetId(item_index)
+        item.SetBackgroundColour(wx.Colour(144, 238, 144))  # Светло-зеленый
+        list_ctrl.SetItem(item)
+        
+        # Убираем выделение через 3 секунды
+        wx.CallLater(3000, self._clear_dependency_highlight)
+        
+        logger.debug(f"[ModsTab/Highlight] Мод на позиции {item_index} выделен как зависимость")
+
+    def _clear_dependency_highlight(self):
+        """Убирает временное выделение зависимостей"""
+        if self.highlighted_list and self.highlighted_item is not None:
+            # Восстанавливаем обычный цвет фона
+            item = wx.ListViewItem()
+            item.SetId(self.highlighted_item)
+            item.SetBackgroundColour(wx.NullColour)  # Стандартный цвет
+            self.highlighted_list.SetItem(item)
+            
+            logger.debug(f"[ModsTab/Highlight] Выделение зависимости убрано")
+            
+        # Сбрасываем переменные
+        self.highlighted_list = None
+        self.highlighted_item = None
 
     def _load_single_mod_image_task(self, mod_id: str, image_url: str):
         try:
@@ -931,10 +1054,80 @@ class ModsTab(wx.Panel):
             wx.LaunchDefaultBrowser(url)
 
     def _on_check_updates(self, event):
-        wx.MessageBox("Функция проверки обновлений пока не реализована.", "В разработке", wx.OK | wx.ICON_INFORMATION)
+        """Проверка обновлений с принудительной загрузкой данных"""
+        if not self.current_game:
+            wx.MessageBox("Сначала выберите игру.", "Ошибка", wx.OK | wx.ICON_WARNING)
+            return
+        
+        # Очищаем кэш для всех модов текущей игры
+        all_mods = self.mod_manager.get_installed_mods(self.current_game.steam_id)
+        mod_ids = [mod.mod_id for mod in all_mods]
+        
+        if not mod_ids:
+            wx.MessageBox("Нет установленных модов для проверки.", "Информация", wx.OK | wx.ICON_INFORMATION)
+            return
+        
+        # Показываем диалог прогресса
+        progress_dialog = wx.ProgressDialog(
+            "Проверка обновлений",
+            "Очистка кэша и загрузка данных...",
+            maximum=len(mod_ids),
+            parent=self,
+            style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_CAN_ABORT
+        )
+        
+        def check_updates_task():
+            try:
+                # Очищаем кэш для всех модов
+                for i, mod_id in enumerate(mod_ids):
+                    if not progress_dialog.Update(i, f"Очистка кэша для мода {mod_id}"):
+                        progress_dialog.Destroy()
+                        return
+                    
+                    self.steam_workshop_service.invalidate_cache(mod_id)
+                
+                # Загружаем обновленные данные
+                results = self.steam_workshop_service.preload_missing_mods(mod_ids)
+                
+                # Обновляем интерфейс
+                wx.CallAfter(self._refresh_all_mod_data, results)
+                wx.CallAfter(progress_dialog.Destroy)
+                wx.CallAfter(wx.MessageBox, 
+                           f"Проверка завершена. Обновлено {sum(results.values())} из {len(mod_ids)} модов.", 
+                           "Готово", wx.OK | wx.ICON_INFORMATION)
+                
+            except Exception as e:
+                logger.error(f"[ModsTab/CheckUpdates] Ошибка: {e}")
+                wx.CallAfter(progress_dialog.Destroy)
+                wx.CallAfter(wx.MessageBox, f"Ошибка при проверке обновлений: {e}", "Ошибка", wx.OK | wx.ICON_ERROR)
+        
+        # Запускаем в отдельном потоке
+        threading.Thread(target=check_updates_task, daemon=True).start()
 
     def _on_update_all_mods(self, event):
-        wx.MessageBox("Функция обновления всех модов пока не реализована.", "В разработке", wx.OK | wx.ICON_INFORMATION)
+        """Обновление всех модов (пока просто проверка)"""
+        wx.MessageBox("Функция обновления всех модов пока не реализована.\nИспользуйте 'Проверить обновления' для обновления данных.", "В разработке", wx.OK | wx.ICON_INFORMATION)
+
+    def _refresh_all_mod_data(self, results: Dict[str, bool]):
+        """Обновляет данные всех модов после проверки"""
+        try:
+            # Обновляем детали модов из кэша
+            for mod_id, success in results.items():
+                if success:
+                    details = self.steam_workshop_service.get_mod_details(mod_id)
+                    if details:
+                        self.mod_details[mod_id] = details
+                        self._update_mod_name_in_lists(mod_id, details.get('title', mod_id))
+            
+            # Обновляем информацию о выбранном моде
+            if self.selected_mod_id:
+                details = self.mod_details.get(self.selected_mod_id, {})
+                self._display_mod_info(self.selected_mod_id, details)
+            
+            logger.info(f"[ModsTab/Refresh] Обновлены данные для {sum(results.values())} модов")
+            
+        except Exception as e:
+            logger.error(f"[ModsTab/Refresh] Ошибка обновления данных: {e}")
 
     def _enable_mod(self, mod_ids: List[str]) -> bool:
         if not self or not self.current_game: return False
@@ -1074,6 +1267,7 @@ class ModsTab(wx.Panel):
     def Destroy(self):
         self.names_aborted = True
         self.loading_aborted = True
+        self._clear_dependency_highlight()  # Очищаем выделение зависимостей
         if HAS_EVENT_BUS and event_bus:
             event_bus.unsubscribe("mods_updated", self._on_mods_updated_event)
         self._hide_names_loading_dialog()

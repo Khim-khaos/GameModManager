@@ -3,9 +3,12 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import logging
+import time
+import random
 from typing import Dict, List, Optional, Tuple, Set
 from urllib.parse import urlparse, parse_qs, urljoin
 from src.models.mod import ModDependency
+from src.core.process_monitor import CacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -16,21 +19,75 @@ class SteamWorkshopService:
 
     def __init__(self):
         self.session = requests.Session()
+        self.cache_manager = CacheManager()
+        self.last_request_time = 0
+        self.min_request_interval = 1.0  # Минимум 1 секунда между запросами
+        self.max_retries = 3  # Максимальное количество повторных попыток
         # Можно добавить retries, адаптеры и т.д. при необходимости
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
         })
 
+    def _wait_for_rate_limit(self):
+        """Ожидание для соблюдения лимитов запросов"""
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        
+        if time_since_last < self.min_request_interval:
+            sleep_time = self.min_request_interval - time_since_last
+            logger.debug(f"[SteamWorkshopService] Ожидание {sleep_time:.2f}с для соблюдения лимитов")
+            time.sleep(sleep_time)
+        
+        self.last_request_time = time.time()
+
+    def _make_request_with_retry(self, url: str, timeout: int = 15) -> Optional[requests.Response]:
+        """Выполняет запрос с повторными попытками при 429 ошибках"""
+        for attempt in range(self.max_retries):
+            try:
+                self._wait_for_rate_limit()
+                response = self.session.get(url, timeout=timeout)
+                
+                if response.status_code == 429:
+                    # Too Many Requests - ждем и повторяем
+                    wait_time = min(60, (2 ** attempt) + random.uniform(0, 1))  # Экспоненциальная задержка
+                    logger.warning(f"[SteamWorkshopService] 429 ошибка, попытка {attempt + 1}/{self.max_retries}, ожидание {wait_time:.1f}с")
+                    time.sleep(wait_time)
+                    continue
+                
+                response.raise_for_status()
+                return response
+                
+            except requests.RequestException as e:
+                if attempt == self.max_retries - 1:
+                    logger.error(f"[SteamWorkshopService] Ошибка запроса после {self.max_retries} попыток: {e}")
+                    return None
+                logger.warning(f"[SteamWorkshopService] Попытка {attempt + 1} не удалась: {e}")
+                time.sleep(1)
+        
+        return None
+
     def get_mod_details(self, mod_id: str) -> Optional[Dict[str, any]]:
         """
-        Получает название, автора, описание, теги и зависимости мода.
+        Получает название, автора, описание, теги и зависимости мода с кэшированием.
         :param mod_id: ID мода.
         :return: Словарь с ключами 'title', 'author', 'description', 'tags', 'dependencies' или None при ошибке.
         """
+        cache_key = f"mod_details_{mod_id}"
+        
+        # Проверяем кэш
+        cached_data = self.cache_manager.get(cache_key)
+        if cached_data:
+            logger.debug(f"[SteamWorkshopService/Details] Используем кэш для мода {mod_id}")
+            return cached_data
+        
+        # Если нет в кэше, загружаем данные
         url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={mod_id}"
         try:
-            response = self.session.get(url, timeout=15)
-            response.raise_for_status()
+            response = self._make_request_with_retry(url)
+            if not response:
+                logger.warning(f"[SteamWorkshopService/Details] Не удалось получить данные для мода {mod_id} после {self.max_retries} попыток")
+                return None
+                
             soup = BeautifulSoup(response.text, 'html.parser')
 
             # --- Извлечение названия ---
@@ -54,29 +111,44 @@ class SteamWorkshopService:
             tags, dependencies = self._extract_tags_and_dependencies(soup)
             tags = [self._sanitize_text(tag) for tag in tags]
 
-            return {
+            result = {
                 'title': title,
                 'author': author,
                 'description': description,
                 'tags': tags,
                 'dependencies': dependencies
             }
-        except requests.RequestException as e:
-            logger.warning(f"[SteamWorkshopService/Details] Сетевая ошибка при получении деталей мода {mod_id}: {e}")
+            
+            # Сохраняем в кэш на 1 час (3600 секунд)
+            self.cache_manager.set(cache_key, result, ttl=3600.0)
+            logger.debug(f"[SteamWorkshopService/Details] Загружены и закэшированы данные для мода {mod_id}")
+            
+            return result
         except Exception as e:
             logger.error(f"[SteamWorkshopService/Details] Ошибка при парсинге деталей мода {mod_id}: {e}")
         return None
 
     def get_mod_update_info(self, mod_id: str) -> Optional[Dict[str, str]]:
         """
-        Получает дату обновления, размер файла и URL изображения.
+        Получает дату обновления, размер файла и URL изображения с кэшированием.
         :param mod_id: ID мода.
         :return: Словарь с ключами 'updated_date', 'file_size', 'image_url' или None при ошибке.
         """
+        cache_key = f"mod_update_info_{mod_id}"
+        
+        # Проверяем кэш
+        cached_data = self.cache_manager.get(cache_key)
+        if cached_data:
+            logger.debug(f"[SteamWorkshopService/UpdateInfo] Используем кэш для мода {mod_id}")
+            return cached_data
+        
         url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={mod_id}"
         try:
-            response = self.session.get(url, timeout=15)
-            response.raise_for_status()
+            response = self._make_request_with_retry(url)
+            if not response:
+                logger.warning(f"[SteamWorkshopService/UpdateInfo] Не удалось получить данные для мода {mod_id} после {self.max_retries} попыток")
+                return None
+                
             soup = BeautifulSoup(response.text, 'html.parser')
 
             # --- Извлечение даты обновления ---
@@ -100,21 +172,40 @@ class SteamWorkshopService:
                     file_size = self._sanitize_text(size_value.text, default="Неизвестно")
 
             # --- Извлечение URL изображения ---
-            image_url = self._extract_image_url(soup)
+            image_url = None
+            # Поиск превью-изображения
+            preview_img = soup.find('img', id='previewImageMain')
+            if preview_img and preview_img.get('src'):
+                image_url = preview_img['src']
+            
+            # Если не нашли основное изображение, ищем другие варианты
+            if not image_url:
+                # Поиск в модальной галерее
+                modal_img = soup.find('div', class_='modalPreviewImage')
+                if modal_img:
+                    img_tag = modal_img.find('img')
+                    if img_tag and img_tag.get('src'):
+                        image_url = img_tag['src']
+                
+                # Поиск в списке скриншотов
+                if not image_url:
+                    screenshot_img = soup.find('img', class_='workshopItemPreviewImage')
+                    if screenshot_img and screenshot_img.get('src'):
+                        image_url = screenshot_img['src']
 
-            # --- Извлечение даты установки (если нужно, можно добавить позже) ---
-            install_date = "Неизвестно" # Пока не извлекаем со страницы, берем из файловой системы
-
-            return {
+            result = {
                 'updated_date': updated_date,
                 'file_size': file_size,
-                'image_url': image_url,
-                'install_date': install_date # Добавлено для полноты
+                'image_url': image_url
             }
-        except requests.RequestException as e:
-            logger.warning(f"[SteamWorkshopService/UpdateInfo] Сетевая ошибка при получении инфо обновления мода {mod_id}: {e}")
+            
+            # Сохраняем в кэш на 30 минут (1800 секунд)
+            self.cache_manager.set(cache_key, result, ttl=1800.0)
+            logger.debug(f"[SteamWorkshopService/UpdateInfo] Загружены и закэшированы данные для мода {mod_id}")
+            
+            return result
         except Exception as e:
-            logger.error(f"[SteamWorkshopService/UpdateInfo] Ошибка при парсинге инфо обновления мода {mod_id}: {e}")
+            logger.error(f"[SteamWorkshopService/UpdateInfo] Ошибка при парсинге инфо об обновлении мода {mod_id}: {e}")
         return None
 
     def _extract_image_url(self, soup: BeautifulSoup) -> Optional[str]:
@@ -327,6 +418,54 @@ class SteamWorkshopService:
             # Создаем объект ModDependency
             dependency_items.append(ModDependency(mod_id=dep_id, name=dep_name, is_installed=is_installed))
         return dependency_items
+
+    def invalidate_cache(self, mod_id: str = None):
+        """
+        Инвалидация кэша для конкретного мода или всего кэша.
+        
+        :param mod_id: ID мода для очистки (опционально).
+        """
+        if mod_id:
+            # Очищаем кэш для конкретного мода
+            self.cache_manager.invalidate(f"mod_details_{mod_id}")
+            self.cache_manager.invalidate(f"mod_update_info_{mod_id}")
+            logger.info(f"[SteamWorkshopService] Кэш очищен для мода {mod_id}")
+        else:
+            # Очищаем весь кэш
+            self.cache_manager.clear()
+            logger.info("[SteamWorkshopService] Весь кэш очищен")
+    
+    def get_cached_mods(self, mod_ids: List[str]) -> Dict[str, Dict[str, any]]:
+        """
+        Возвращает данные для модов, которые есть в кэше.
+        
+        :param mod_ids: Список ID модов для проверки.
+        :return: Словарь {mod_id: cached_data} только для модов с кэшем.
+        """
+        cached_mods = {}
+        for mod_id in mod_ids:
+            cached_data = self.cache_manager.get(f"mod_details_{mod_id}")
+            if cached_data:
+                cached_mods[mod_id] = cached_data
+        return cached_mods
+    
+    def preload_missing_mods(self, mod_ids: List[str]) -> Dict[str, bool]:
+        """
+        Загружает данные для модов, которых нет в кэше.
+        
+        :param mod_ids: Список ID модов для проверки и загрузки.
+        :return: Словарь {mod_id: success} с результатами загрузки.
+        """
+        results = {}
+        for mod_id in mod_ids:
+            cache_key = f"mod_details_{mod_id}"
+            if not self.cache_manager.get(cache_key):
+                # Мода нет в кэше, загружаем
+                details = self.get_mod_details(mod_id)
+                results[mod_id] = details is not None
+            else:
+                results[mod_id] = True  # Уже в кэше
+        return results
 
 # Глобальный экземпляр (или использовать DI)
 steam_workshop_service = SteamWorkshopService()
