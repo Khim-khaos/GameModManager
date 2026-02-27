@@ -2,6 +2,20 @@
 """
 Конфигурация по умолчанию
 """
+import os
+import sys
+
+# Пути к файлам конфигурации
+if getattr(sys, 'frozen', False):
+    # Запущено как EXE файл
+    DATA_DIR = os.path.join(os.path.dirname(sys.executable), "data")
+else:
+    # Запущено как скрипт
+    DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+
+SETTINGS_CONFIG_FILE = os.path.join(DATA_DIR, "settings.json")
+GAMES_CONFIG_FILE = os.path.join(DATA_DIR, "games.json")
+PROCESS_CACHE_FILE = os.path.join(DATA_DIR, "process_cache.json")
 
 DEFAULT_SETTINGS = {
     "steamcmd_path": "",

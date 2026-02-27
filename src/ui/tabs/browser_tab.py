@@ -11,6 +11,7 @@ import threading
 import json
 import os
 from loguru import logger
+from src.core.i18n import _
 
 # Предполагаем, что event_bus существует
 try:
@@ -67,7 +68,7 @@ class BrowserTab(wx.Panel):
         self.queue_panel = wx.Panel(parent) # <-- Сохраняем ссылку на панель
         queue_sizer = wx.BoxSizer(wx.VERTICAL)
         # --- Обновляем заголовок для отображения количества ---
-        self.queue_title = wx.StaticText(self.queue_panel, label="Очередь загрузки (0 модов)") # <- Динамический заголовок
+        self.queue_title = wx.StaticText(self.queue_panel, label=_("browser.download_queue") + " (0 " + _("mod.mods") + ")") # <- Динамический заголовок
         font = self.queue_title.GetFont()
         font.PointSize += 2
         font = font.Bold()
@@ -75,29 +76,29 @@ class BrowserTab(wx.Panel):
         queue_sizer.Add(self.queue_title, 0, wx.ALL, 5)
         # ----------------------------------------
         self.queue_list = wx.ListCtrl(self.queue_panel, style=wx.LC_REPORT)
-        self.queue_list.AppendColumn("Название", width=200)
-        self.queue_list.AppendColumn("ID", width=150)
+        self.queue_list.AppendColumn(_("mod.name"), width=200)
+        self.queue_list.AppendColumn(_("mod.id"), width=150)
         queue_sizer.Add(self.queue_list, 1, wx.ALL | wx.EXPAND, 5)
         # --- Добавляем кнопки экспорта/импорта и очистки ---
         top_row_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.export_btn = wx.Button(self.queue_panel, label="Экспорт")
+        self.export_btn = wx.Button(self.queue_panel, label=_("browser.export"))
         self.export_btn.Bind(wx.EVT_BUTTON, self._on_export)
         top_row_sizer.Add(self.export_btn, 0, wx.ALL, 5)
-        self.import_btn = wx.Button(self.queue_panel, label="Импорт")
+        self.import_btn = wx.Button(self.queue_panel, label=_("browser.import"))
         self.import_btn.Bind(wx.EVT_BUTTON, self._on_import)
         top_row_sizer.Add(self.import_btn, 0, wx.ALL, 5)
-        self.clear_queue_btn = wx.Button(self.queue_panel, label="Очистить") # <-- Новая кнопка
+        self.clear_queue_btn = wx.Button(self.queue_panel, label=_("browser.clear")) # <-- Новая кнопка
         self.clear_queue_btn.Bind(wx.EVT_BUTTON, self._on_clear_queue) # <-- Привязка
         self.clear_queue_btn.Enable(False) # Отключена, если очередь пуста
         top_row_sizer.Add(self.clear_queue_btn, 0, wx.ALL, 5)
         queue_sizer.Add(top_row_sizer, 0, wx.ALIGN_CENTER)
         # ----------------------------------------
         queue_buttons_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.remove_from_queue_btn = wx.Button(self.queue_panel, label="Убрать из очереди")
+        self.remove_from_queue_btn = wx.Button(self.queue_panel, label=_("browser.remove_from_queue"))
         self.remove_from_queue_btn.Bind(wx.EVT_BUTTON, self._on_remove_from_queue)
         self.remove_from_queue_btn.Enable(False)
         queue_buttons_sizer.Add(self.remove_from_queue_btn, 0, wx.ALL, 5)
-        self.download_btn = wx.Button(self.queue_panel, label="Скачать")
+        self.download_btn = wx.Button(self.queue_panel, label=_("browser.download"))
         self.download_btn.Bind(wx.EVT_BUTTON, self._on_download_queue)
         self.download_btn.Enable(False)
         queue_buttons_sizer.Add(self.download_btn, 0, wx.ALL, 5)
@@ -119,7 +120,7 @@ class BrowserTab(wx.Panel):
         self.remove_from_queue_btn.Enable(has_items)
         self.download_btn.Enable(has_items)
         # --- Обновляем заголовок с количеством ---
-        self.queue_title.SetLabel(f"Очередь загрузки ({len(queue)} модов)")
+        self.queue_title.SetLabel(_("browser.download_queue_title", count=len(queue)))
         # --- Обновляем состояние кнопки очистки ---
         self.clear_queue_btn.Enable(has_items)
         # ----------------------------------------
@@ -131,13 +132,13 @@ class BrowserTab(wx.Panel):
         self.browser_panel = wx.Panel(parent) # <-- Сохраняем ссылку на панель
         browser_sizer = wx.BoxSizer(wx.VERTICAL)
         nav_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.back_btn = wx.Button(self.browser_panel, label="Назад", size=(60, -1))
+        self.back_btn = wx.Button(self.browser_panel, label=_("browser.back"), size=(60, -1))
         self.back_btn.Bind(wx.EVT_BUTTON, self._on_back)
         nav_sizer.Add(self.back_btn, 0, wx.ALL, 5)
-        self.forward_btn = wx.Button(self.browser_panel, label="Вперед", size=(60, -1))
+        self.forward_btn = wx.Button(self.browser_panel, label=_("browser.forward"), size=(60, -1))
         self.forward_btn.Bind(wx.EVT_BUTTON, self._on_forward)
         nav_sizer.Add(self.forward_btn, 0, wx.ALL, 5)
-        self.refresh_btn = wx.Button(self.browser_panel, label="Обновить")
+        self.refresh_btn = wx.Button(self.browser_panel, label=_("browser.refresh"))
         self.refresh_btn.Bind(wx.EVT_BUTTON, self._on_refresh)
         nav_sizer.Add(self.refresh_btn, 0, wx.ALL, 5)
         self.url_text = wx.TextCtrl(self.browser_panel, style=wx.TE_PROCESS_ENTER)
