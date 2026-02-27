@@ -182,3 +182,4 @@ cython_debug/
 /.codex
 /.vscode
 *__init__.py
+/src/data
