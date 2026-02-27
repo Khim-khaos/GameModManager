@@ -6,6 +6,7 @@ import time
 import threading
 from typing import Callable, Optional
 from loguru import logger
+from src.core.i18n import _
 from src.core.game_manager import GameManager
 
 
@@ -37,7 +38,7 @@ class StatusMonitor:
         self._running = True
         self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._thread.start()
-        logger.info(f"Мониторинг статуса игр запущен (интервал: {self.update_interval}с)")
+        logger.info(_("system.monitoring_started", interval=self.update_interval))
     
     def stop(self):
         """Остановка мониторинга"""

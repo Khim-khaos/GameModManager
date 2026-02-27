@@ -6,8 +6,8 @@ import os
 import json
 from typing import Dict, Any
 from loguru import logger
-from src.constants import SETTINGS_CONFIG_FILE
-from src.data.config import DEFAULT_SETTINGS
+from src.data.config import SETTINGS_CONFIG_FILE, DEFAULT_SETTINGS
+from src.core.i18n import _
 
 class SettingsManager:
     """Менеджер настроек"""
@@ -22,13 +22,13 @@ class SettingsManager:
             if os.path.exists(SETTINGS_CONFIG_FILE):
                 with open(SETTINGS_CONFIG_FILE, 'r', encoding='utf-8') as f:
                     self._settings = json.load(f)
-                logger.info("Настройки загружены из файла")
+                logger.info(_("system.settings_loaded"))
             else:
                 self._settings = DEFAULT_SETTINGS.copy()
                 self._save_settings()
-                logger.info("Создан файл настроек по умолчанию")
+                logger.info(_("system.settings_created"))
         except Exception as e:
-            logger.error(f"Ошибка загрузки настроек: {e}")
+            logger.error(_("system.settings_load_error") + f": {e}")
             self._settings = DEFAULT_SETTINGS.copy()
 
     def _save_settings(self):
@@ -37,9 +37,9 @@ class SettingsManager:
             os.makedirs(os.path.dirname(SETTINGS_CONFIG_FILE), exist_ok=True)
             with open(SETTINGS_CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self._settings, f, indent=4, ensure_ascii=False)
-            logger.debug("Настройки сохранены в файл")
+            logger.debug(_("system.settings_saved"))
         except Exception as e:
-            logger.error(f"Ошибка сохранения настроек: {e}")
+            logger.error(_("system.settings_save_error") + f": {e}")
 
     def get(self, key: str, default=None):
         """Получение значения настройки"""
@@ -49,7 +49,7 @@ class SettingsManager:
         """Установка значения настройки"""
         self._settings[key] = value
         self._save_settings()
-        logger.debug(f"Настройка {key} изменена на {value}")
+        logger.debug(_("system.setting_changed").format(key=key, value=value))
 
     def get_all(self) -> Dict[str, Any]:
         """Получение всех настроек"""
@@ -59,4 +59,4 @@ class SettingsManager:
         """Обновление нескольких настроек"""
         self._settings.update(settings_dict)
         self._save_settings()
-        logger.debug("Настройки обновлены")
+        logger.debug(_("system.settings_updated"))
