@@ -110,10 +110,14 @@ def build_exe():
         '--exclude-module=sphinx',
         '--exclude-module=flask',
         '--exclude-module=django',
-        
-        # Иконка (если есть)
-        # '--icon=assets/icon.ico',
     ]
+    
+    # Добавляем иконку если она существует
+    if os.path.exists('assets/icon.ico'):
+        pyinstaller_args.append('--icon=assets/icon.ico')
+        print("📦 Найдена иконка: assets/icon.ico")
+    else:
+        print("⚠️ Иконка assets/icon.ico не найдена, будет использована стандартная")
     
     # Добавляем данные если они существуют
     pyinstaller_args.extend(data_files)
