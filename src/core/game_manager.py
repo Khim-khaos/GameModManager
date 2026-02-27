@@ -6,7 +6,8 @@ import os
 import json
 from typing import List, Optional
 from loguru import logger
-from src.constants import GAMES_CONFIG_FILE
+from src.data.config import GAMES_CONFIG_FILE
+from src.core.i18n import _
 from src.models.game import Game
 from src.event_bus import event_bus
 from src.core.process_monitor import ProcessMonitor
@@ -26,7 +27,7 @@ class GameManager:
                 with open(GAMES_CONFIG_FILE, 'r', encoding='utf-8') as f:
                     games_data = json.load(f)
                     self._games = [Game.from_dict(data) for data in games_data]
-                logger.info(f"Загружено {len(self._games)} игр")
+                logger.info(_("system.games_loaded", count=len(self._games)))
             else:
                 self._games = []
                 self._save_games()
