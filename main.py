@@ -33,6 +33,7 @@ from src.ui.main_window import MainWindow
 from src.core.logger import setup_logger
 from src.core.settings_manager import SettingsManager
 from src.core.language_manager import LanguageManager
+from src.core.i18n import i18n
 
 class GameModManagerApp(wx.App):
     def OnInit(self):
@@ -45,6 +46,9 @@ class GameModManagerApp(wx.App):
         # Инициализируем менеджеры (можно использовать для ранней загрузки языков/настроек)
         self.settings_manager = SettingsManager()
         self.language_manager = LanguageManager()
+        
+        # Устанавливаем глобальный менеджер языков для i18n
+        i18n.set_language_manager(self.language_manager)
 
         # Создаем главное окно
         frame = MainWindow()
