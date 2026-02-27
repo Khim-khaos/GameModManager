@@ -2,6 +2,8 @@
 import concurrent.futures
 import logging
 import threading
+from loguru import logger
+from src.core.i18n import _
 from typing import Callable, Any, Optional, Dict
 
 logger = logging.getLogger(__name__)
@@ -45,9 +47,9 @@ class TaskManager:
 
     def shutdown(self, wait: bool = True):
         """Завершает работу пула потоков."""
-        logger.info("[TaskManager] Завершение работы...")
+        logger.info(_("[TaskManager] ") + _("system.task_manager_shutdown"))
         self.executor.shutdown(wait=wait)
-        logger.info("[TaskManager] Работа завершена.")
+        logger.info(_("[TaskManager] ") + _("system.task_manager_finished"))
 
 # Глобальный экземпляр (или использовать DI)
 task_manager = TaskManager()

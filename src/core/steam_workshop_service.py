@@ -5,7 +5,8 @@ import re
 import logging
 import time
 import random
-from typing import Dict, List, Optional, Tuple, Set
+from datetime import datetime
+from typing import Optional, Dict, List, Any, Tuple, Set
 from urllib.parse import urlparse, parse_qs, urljoin
 from src.models.mod import ModDependency
 from src.core.process_monitor import CacheManager
@@ -21,7 +22,7 @@ class SteamWorkshopService:
         self.session = requests.Session()
         self.cache_manager = CacheManager()
         self.last_request_time = 0
-        self.min_request_interval = 1.0  # Минимум 1 секунда между запросами
+        self.min_request_interval = 2.0  # Минимум 2 секунды между запросами (увеличено для избежания 429)
         self.max_retries = 3  # Максимальное количество повторных попыток
         # Можно добавить retries, адаптеры и т.д. при необходимости
         self.session.headers.update({
@@ -66,18 +67,120 @@ class SteamWorkshopService:
         
         return None
 
-    def get_mod_details(self, mod_id: str) -> Optional[Dict[str, any]]:
+    def _parse_file_size(self, size_str: str) -> Optional[int]:
+        """Парсит размер файла в байты"""
+        if not size_str or size_str == "Неизвестно":
+            return None
+        
+        try:
+            # Примеры: "184.426 MB", "25.991 MB", "1.234 GB"
+            size_str = size_str.replace(',', '.')  # Заменяем запятую на точку
+            parts = size_str.split()
+            
+            if len(parts) >= 2:
+                size_value = float(parts[0])
+                unit = parts[1].upper()
+                
+                multipliers = {
+                    'B': 1,
+                    'KB': 1024,
+                    'MB': 1024 * 1024,
+                    'GB': 1024 * 1024 * 1024,
+                    'TB': 1024 * 1024 * 1024 * 1024
+                }
+                
+                if unit in multipliers:
+                    return int(size_value * multipliers[unit])
+                    
+        except Exception as e:
+            logger.debug(f"[SteamWorkshopService] Не удалось распарсить размер '{size_str}': {e}")
+        
+        return None
+
+    def _parse_steam_date(self, date_str: str) -> Optional[datetime]:
+        """Парсит дату из формата Steam в datetime объект"""
+        if not date_str or date_str == "Неизвестно":
+            return None
+        
+        try:
+            # Примеры форматов:
+            # "17 Oct, 2023 @ 10:34am"
+            # "18 фев в 3:51" (русский)
+            # "19 окт. 2024 г. в 11:04" (русский полный)
+            
+            # Английский формат
+            if '@' in date_str:
+                # "17 Oct, 2023 @ 10:34am"
+                date_part = date_str.split('@')[0].strip()
+                time_part = date_str.split('@')[1].strip()
+                
+                # Парсим дату
+                try:
+                    parsed_date = datetime.strptime(date_part, "%d %b, %Y")
+                except ValueError:
+                    # Альтернативный формат
+                    parsed_date = datetime.strptime(date_part, "%d %B, %Y")
+                
+                # Парсим время
+                if 'am' in time_part or 'pm' in time_part:
+                    time_obj = datetime.strptime(time_part.strip(), "%I:%M%p")
+                else:
+                    time_obj = datetime.strptime(time_part.strip(), "%H:%M")
+                
+                # Комбинируем
+                return parsed_date.replace(hour=time_obj.hour, minute=time_obj.minute)
+            
+            # Русский формат короткий
+            elif 'в' in date_str and '.' not in date_str.split('в')[0]:
+                # "18 фев в 3:51"
+                parts = date_str.split('в')
+                date_part = parts[0].strip()
+                time_part = parts[1].strip()
+                
+                # Месяцы на русском
+                months = {
+                    'янв': 1, 'фев': 2, 'мар': 3, 'апр': 4, 'мая': 5, 'июн': 6,
+                    'июл': 7, 'авг': 8, 'сен': 9, 'окт': 10, 'ноя': 11, 'дек': 12
+                }
+                
+                day, month = date_part.split()
+                month_num = months.get(month.lower())
+                if month_num:
+                    current_year = datetime.now().year
+                    time_obj = datetime.strptime(time_part, "%H:%M")
+                    return datetime(current_year, month_num, int(day), time_obj.hour, time_obj.minute)
+            
+            # Русский формат полный
+            elif 'г.' in date_str:
+                # "19 окт. 2024 г. в 11:04"
+                parts = date_str.split('в')
+                date_part = parts[0].replace('г.', '').strip()
+                time_part = parts[1].strip()
+                
+                # Парсим полную дату
+                parsed_date = datetime.strptime(date_part, "%d %b. %Y")
+                time_obj = datetime.strptime(time_part, "%H:%M")
+                
+                return parsed_date.replace(hour=time_obj.hour, minute=time_obj.minute)
+                
+        except Exception as e:
+            logger.debug(f"[SteamWorkshopService] Не удалось распарсить дату '{date_str}': {e}")
+        
+        return None
+
+    def get_mod_details(self, mod_id: str, force_refresh: bool = False) -> Optional[Dict[str, any]]:
         """
         Получает название, автора, описание, теги и зависимости мода с кэшированием.
         :param mod_id: ID мода.
-        :return: Словарь с ключами 'title', 'author', 'description', 'tags', 'dependencies' или None при ошибке.
+        :param force_refresh: Принудительно обновить данные из Steam.
+        :return: Словарь с ключами 'title', 'author', 'description', 'tags', 'dependencies', 'updated_date', 'file_size' или None при ошибке.
         """
         cache_key = f"mod_details_{mod_id}"
         
         # Проверяем кэш
         cached_data = self.cache_manager.get(cache_key)
-        if cached_data:
-            logger.debug(f"[SteamWorkshopService/Details] Используем кэш для мода {mod_id}")
+        if cached_data and not force_refresh:
+            logger.debug(f"[SteamWorkshopService/Details] Данные для мода {mod_id} найдены в кэше")
             return cached_data
         
         # Если нет в кэше, загружаем данные
@@ -111,12 +214,66 @@ class SteamWorkshopService:
             tags, dependencies = self._extract_tags_and_dependencies(soup)
             tags = [self._sanitize_text(tag) for tag in tags]
 
+            # --- Извлечение даты обновления ---
+            updated_date = None
+            logger.debug(f"[SteamWorkshopService/Details] Начало поиска даты обновления для {mod_id}")
+            
+            # Сначала ищем все возможные детали
+            all_details = soup.find_all('div', class_='detailsStat')
+            logger.debug(f"[SteamWorkshopService/Details] Найдено detailsStat блоков: {len(all_details)}")
+            
+            for detail_block in all_details:
+                left_div = detail_block.find('div', class_='detailsStatLeft')
+                right_div = detail_block.find('div', class_='detailsStatRight')
+                
+                if left_div and right_div:
+                    left_text = left_div.text.strip()
+                    right_text = right_div.text.strip()
+                    logger.debug(f"[SteamWorkshopService/Details] Найдена пара: '{left_text}' -> '{right_text}'")
+                    
+                    # Проверяем на дату обновления
+                    if re.search(r'.*Updated.*|.*Изменён.*|.*Обновлено.*', left_text, re.I):
+                        logger.debug(f"[SteamWorkshopService/Details] Найдена дата обновления: '{right_text}'")
+                        updated_date = self._parse_steam_date(right_text)
+                        logger.debug(f"[SteamWorkshopService/Details] Распарсенная дата обновления {mod_id}: '{right_text}' -> {updated_date}")
+                        break
+            
+            if not updated_date:
+                logger.warning(f"[SteamWorkshopService/Details] Не найдена дата обновления для {mod_id}")
+                # Дебаг: выведем все div с классом detailsStatLeft
+                stat_left_divs = soup.find_all('div', class_='detailsStatLeft')
+                logger.debug(f"[SteamWorkshopService/Details] Найдено div.detailsStatLeft: {[div.text.strip() for div in stat_left_divs]}")
+
+            # --- Извлечение размера файла ---
+            file_size = None
+            logger.debug(f"[SteamWorkshopService/Details] Начало поиска размера файла для {mod_id}")
+            
+            for detail_block in all_details:
+                left_div = detail_block.find('div', class_='detailsStatLeft')
+                right_div = detail_block.find('div', class_='detailsStatRight')
+                
+                if left_div and right_div:
+                    left_text = left_div.text.strip()
+                    right_text = right_div.text.strip()
+                    
+                    # Проверяем на размер файла
+                    if re.search(r'.*Size.*|.*Размер.*', left_text, re.I):
+                        logger.debug(f"[SteamWorkshopService/Details] Найден размер файла: '{right_text}'")
+                        file_size = self._parse_file_size(right_text)
+                        logger.debug(f"[SteamWorkshopService/Details] Распарсенный размер файла {mod_id}: '{right_text}' -> {file_size} байт")
+                        break
+            
+            if not file_size:
+                logger.warning(f"[SteamWorkshopService/Details] Не найден размер файла для {mod_id}")
+
             result = {
                 'title': title,
                 'author': author,
                 'description': description,
                 'tags': tags,
-                'dependencies': dependencies
+                'dependencies': dependencies,
+                'updated_date': updated_date,
+                'file_size': file_size
             }
             
             # Сохраняем в кэш на 1 час (3600 секунд)
