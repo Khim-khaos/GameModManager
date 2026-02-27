@@ -7,10 +7,10 @@ import wx
 import threading
 import json
 import time
+from datetime import datetime
 from pathlib import Path
 from loguru import logger
 from typing import List, Dict, Optional, Any, Set
-from datetime import datetime
 import requests
 from io import BytesIO
 # Импорт моделей
@@ -108,6 +108,23 @@ class ModsTab(wx.Panel):
 
     def _create_ui(self):
         main_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Добавляем панель с кнопками управления модами наверх
+        control_panel = wx.Panel(self)
+        control_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        self.check_updates_btn = wx.Button(control_panel, label="Проверить обновления")
+        self.update_all_btn = wx.Button(control_panel, label="Обновить все")
+        self.check_updates_btn.Bind(wx.EVT_BUTTON, self._on_check_updates)
+        self.update_all_btn.Bind(wx.EVT_BUTTON, self._on_update_all_mods)
+        
+        control_sizer.Add(self.check_updates_btn, 0, wx.RIGHT | wx.TOP | wx.BOTTOM, 5)
+        control_sizer.Add(self.update_all_btn, 0, wx.RIGHT | wx.TOP | wx.BOTTOM, 5)
+        control_sizer.AddStretchSpacer(1)  # Растягиваемый spacer для прижатия к левому краю
+        
+        control_panel.SetSizer(control_sizer)
+        main_sizer.Add(control_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
+        
         self.main_splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE | wx.SP_3D)
         self.main_splitter.SetMinimumPaneSize(150)
         self.info_panel = wx.Panel(self.main_splitter)
@@ -149,14 +166,6 @@ class ModsTab(wx.Panel):
         self.mod_info_sizer.Add(self.mod_deps_panel, 0, wx.EXPAND | wx.LEFT, 10)
         self.mod_info_panel.SetSizer(self.mod_info_sizer)
         right_sizer.Add(self.mod_info_panel, 1, wx.EXPAND | wx.ALL, 5)
-        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.check_updates_btn = wx.Button(right_panel, label="Проверить обновления")
-        self.update_all_btn = wx.Button(right_panel, label="Обновить все")
-        self.check_updates_btn.Bind(wx.EVT_BUTTON, self._on_check_updates)
-        self.update_all_btn.Bind(wx.EVT_BUTTON, self._on_update_all_mods)
-        button_sizer.Add(self.check_updates_btn, 0, wx.RIGHT, 5)
-        button_sizer.Add(self.update_all_btn, 0, wx.RIGHT, 5)
-        right_sizer.Add(button_sizer, 0, wx.ALL | wx.ALIGN_LEFT, 5)
         right_panel.SetSizer(right_sizer)
         info_sizer.Add(right_panel, 1, wx.EXPAND)
         self.info_panel.SetSizer(info_sizer)
@@ -443,6 +452,10 @@ class ModsTab(wx.Panel):
         logger.debug(f"[ModsTab/DisplayInfo] Отображение информации для {mod_id}: {details}")
         if not self or mod_id != self.selected_mod_id:
             return
+        
+        # Сначала убираем подсветку зависимостей от предыдущего мода
+        self._clear_all_dependency_highlights()
+        
         try:
             # Получаем объект мода для правильного отображения дат
             mod_obj = self.mod_manager.get_mod_by_id(mod_id) if self.mod_manager else None
@@ -453,18 +466,66 @@ class ModsTab(wx.Panel):
             tags = details.get('tags', [])
             dependencies = details.get('dependencies', [])
             
+            logger.debug(f"[ModsTab/DisplayInfo] Зависимости мода {mod_id}: {dependencies}")
+            logger.info(f"[ModsTab/DisplayInfo] Мод {mod_id} имеет {len(dependencies)} зависимостей")
+            
+            # Используем данные из Steam если доступны, иначе из объекта мода
+            steam_updated_date = None
+            steam_file_size = None
+            
+            if details:
+                steam_updated_date = details.get('updated_date')
+                steam_file_size = details.get('file_size')
+                if steam_updated_date:
+                    logger.debug(f"[ModsTab/DisplayInfo] Steam дата обновления для {mod_id}: {steam_updated_date}")
+                if steam_file_size:
+                    logger.debug(f"[ModsTab/DisplayInfo] Steam размер для {mod_id}: {steam_file_size} байт")
+            
             # Используем данные из объекта мода, если доступны
             if mod_obj:
                 install_date = mod_obj.formatted_install_date
-                updated_date = mod_obj.formatted_updated_date
                 local_update_date = mod_obj.formatted_local_update_date
-                file_size = mod_obj.formatted_file_size
+                
+                # Приоритет данным из Steam для даты обновления и размера
+                if steam_updated_date:
+                    updated_date = steam_updated_date.strftime("%d.%m.%Y %H:%M") if isinstance(steam_updated_date, datetime) else str(steam_updated_date)
+                else:
+                    updated_date = mod_obj.formatted_updated_date
+                
+                if steam_file_size:
+                    # Конвертируем байты в читаемый формат
+                    size = steam_file_size
+                    for unit in ['Б', 'КБ', 'МБ', 'ГБ']:
+                        if size < 1024.0:
+                            file_size = f"{size:.1f} {unit}"
+                            break
+                        size /= 1024.0
+                    else:
+                        file_size = f"{size:.1f} ТБ"
+                else:
+                    file_size = mod_obj.formatted_file_size
             else:
                 # Fallback на старую логику, если мод не найден
                 version_info = self.mod_versions.get(mod_id, {})
                 install_date = version_info.get('install_date', 'Неизвестно')
-                updated_date = version_info.get('updated_date', 'Неизвестно')
-                file_size = version_info.get('file_size', 'Неизвестно')
+                
+                if steam_updated_date:
+                    updated_date = steam_updated_date.strftime("%d.%m.%Y %H:%M") if isinstance(steam_updated_date, datetime) else str(steam_updated_date)
+                else:
+                    updated_date = version_info.get('updated_date', 'Неизвестно')
+                
+                if steam_file_size:
+                    size = steam_file_size
+                    for unit in ['Б', 'КБ', 'МБ', 'ГБ']:
+                        if size < 1024.0:
+                            file_size = f"{size:.1f} {unit}"
+                            break
+                        size /= 1024.0
+                    else:
+                        file_size = f"{size:.1f} ТБ"
+                else:
+                    file_size = version_info.get('file_size', 'Неизвестно')
+                    
                 local_update_date = version_info.get('local_update_date', 'Неизвестно')
             
             if self.mod_title_label:
@@ -499,15 +560,19 @@ class ModsTab(wx.Panel):
                 self.mod_deps_label.SetLabel("Зависимости: ")
             if self.mod_deps_sizer:
                 self.mod_deps_sizer.Clear(True)
+                
+                # Получаем установленные моды независимо от наличия зависимостей
+                installed_mod_ids: Set[str] = set()
+                if self.current_game:
+                    try:
+                        installed_mods: List[Mod] = self.mod_manager.get_installed_mods(self.current_game.steam_id)
+                        installed_mod_ids = {m.mod_id for m in installed_mods}
+                        logger.info(f"[ModsTab/DisplayInfo] Установленные моды: {list(installed_mod_ids)[:5]}... (всего {len(installed_mod_ids)})")
+                    except Exception as e:
+                        logger.error(f"[ModsTab/DisplayInfo] Ошибка получения списка установленных модов: {e}")
+                        installed_mod_ids = set()
+                
                 if dependencies:
-                    installed_mod_ids: Set[str] = set()
-                    if self.current_game:
-                        try:
-                            installed_mods: List[Mod] = self.mod_manager.get_installed_mods(self.current_game.steam_id)
-                            installed_mod_ids = {m.mod_id for m in installed_mods}
-                        except Exception as e:
-                            logger.error(f"[ModsTab/DisplayInfo] Ошибка получения списка установленных модов: {e}")
-                            installed_mod_ids = set()
                     for dep_id in dependencies:
                         dep_sizer = wx.BoxSizer(wx.HORIZONTAL)
                         dep_status_text = wx.StaticText(self.mod_deps_panel, label="[Установлен] " if dep_id in installed_mod_ids else "[Не установлен] ")
@@ -519,22 +584,33 @@ class ModsTab(wx.Panel):
                         if dep_details and dep_details.get('title'):
                             dep_name = dep_details['title']
                         
+                        # Временное логирование для отладки
+                        logger.info(f"[ModsTab/DisplayInfo] Зависимость: {dep_id} ({dep_name}) - {'УСТАНОВЛЕН' if dep_id in installed_mod_ids else 'НЕ УСТАНОВЛЕН'}")
+                        
                         if dep_id in installed_mod_ids:
                             dep_link = hl.HyperLinkCtrl(self.mod_deps_panel, id=wx.ID_ANY, label=dep_name, URL="")
                             dep_link.SetToolTip(f"ID: {dep_id}\nУстановлен - кликните для выделения в списке")
-                            dep_link.Bind(hl.EVT_HYPERLINK_LEFT, lambda evt, mid=dep_id: self._on_dependency_click(mid))
+                            logger.info(f"[ModsTab/DisplayInfo] Создание гиперссылки для установленной зависимости: {dep_id} ({dep_name})")
+                            # Пробуем использовать EVT_LEFT_UP вместо EVT_HYPERLINK_LEFT
+                            dep_link.Bind(wx.EVT_LEFT_UP, lambda evt, mid=dep_id: self._on_dependency_click(mid))
+                            logger.info(f"[ModsTab/DisplayInfo] Привязано событие клика для зависимости: {dep_id}")
                             dep_sizer.Add(dep_link, 0, wx.ALIGN_CENTER_VERTICAL)
                         else:
                             dep_id_text = wx.StaticText(self.mod_deps_panel, label=f"{dep_name} ({dep_id})")
                             dep_id_text.SetToolTip(f"ID: {dep_id}\nНе установлен - кликните для открытия в браузере")
+                            logger.info(f"[ModsTab/DisplayInfo] Создание текста для неустановленной зависимости: {dep_id} ({dep_name})")
                             # Делаем текст кликабельным для неустановленных зависимостей
                             dep_id_text.Bind(wx.EVT_LEFT_UP, lambda evt, mid=dep_id: self._on_dependency_click(mid))
+                            logger.info(f"[ModsTab/DisplayInfo] Привязано событие клика для неустановленной зависимости: {dep_id}")
                             dep_sizer.Add(dep_id_text, 0, wx.ALIGN_CENTER_VERTICAL)
                         self.mod_deps_sizer.Add(dep_sizer, 0, wx.EXPAND | wx.ALL, 1)
                 else:
                     no_deps_text = wx.StaticText(self.mod_deps_panel, label="Нет зависимостей")
                     self.mod_deps_sizer.Add(no_deps_text, 0, wx.ALL, 2)
                 self.mod_deps_panel.Layout()
+                
+                # Подсвечиваем все установленные зависимости этого мода
+                self._highlight_all_dependencies(dependencies, installed_mod_ids)
             cached_bitmap = self.mod_images.get(mod_id)
             if cached_bitmap and self.mod_image:
                 logger.debug(f"[ModsTab/DisplayInfo] [{mod_id}] Отображение изображения из кэша.")
@@ -559,52 +635,111 @@ class ModsTab(wx.Panel):
             logger.error(f"[ModsTab/DisplayInfo] Ошибка отображения информации для {mod_id}: {e}")
 
     def _on_dependency_click(self, mod_id: str):
-        logger.debug(f"[ModsTab/DepClick] Клик по зависимости {mod_id}")
+        logger.info(f"[ModsTab/DepClick] Клик по зависимости {mod_id}")
         
         # Проверяем, установлен ли мод
         installed_mods = self.mod_manager.get_installed_mods(self.current_game.steam_id)
         installed_mod_ids = {m.mod_id for m in installed_mods}
         
+        logger.info(f"[ModsTab/DepClick] Установленные моды: {list(installed_mod_ids)[:5]}... (всего {len(installed_mod_ids)})")
+        logger.info(f"[ModsTab/DepClick] Проверяем зависимость {mod_id}: {'УСТАНОВЛЕН' if mod_id in installed_mod_ids else 'НЕ УСТАНОВЛЕН'}")
+        
         if mod_id in installed_mod_ids:
             # Установленная зависимость - выделяем в списке
-            logger.debug(f"[ModsTab/DepClick] Зависимость {mod_id} установлена, выделяем в списке")
+            logger.info(f"[ModsTab/DepClick] Зависимость {mod_id} установлена, выделяем в списке")
             self._select_mod_by_id(mod_id)
         else:
             # Неустановленная зависимость - открываем в браузере приложения
-            logger.debug(f"[ModsTab/DepClick] Зависимость {mod_id} не установлена, открываем в браузере")
-            self._open_mod_in_browser(mod_id)
+            logger.info(f"[ModsTab/DepClick] Зависимость {mod_id} не установлена, открываем в браузере")
+            self._on_open_mod_in_browser(mod_id)
 
     def _select_mod_by_id(self, mod_id: str):
         if not mod_id or not self.current_game:
             return
-        logger.debug(f"[ModsTab/SelectByID] Попытка выделить мод {mod_id}")
+        logger.info(f"[ModsTab/SelectByID] Попытка выделить мод {mod_id}")
         found = False
         
-        # Сначала убираем предыдущее выделение зависимостей
-        self._clear_dependency_highlight()
+        # НЕ убираем подсветку зависимостей - она теперь постоянная для выбранного мода
         
         for list_ctrl in [self.disabled_list, self.enabled_list]:
+            list_name = "disabled_list" if list_ctrl is self.disabled_list else "enabled_list"
+            logger.info(f"[ModsTab/SelectByID] Поиск в {list_name} (всего элементов: {list_ctrl.GetItemCount()})")
+            
             item_index = self._find_mod_item_index_by_id(list_ctrl, mod_id)
             if item_index != wx.NOT_FOUND:
+                logger.info(f"[ModsTab/SelectByID] Мод {mod_id} найден в {list_name} на позиции {item_index}")
+                
                 other_list = self.enabled_list if list_ctrl is self.disabled_list else self.disabled_list
                 other_list.Select(-1, on=0)
                 list_ctrl.Select(item_index, on=True)
                 list_ctrl.EnsureVisible(item_index)
                 list_ctrl.SetFocus()
                 
-                # Временное выделение зеленым цветом
-                self._highlight_dependency(list_ctrl, item_index)
-                
-                event = wx.ListEvent(wx.wxEVT_LIST_ITEM_SELECTED, list_ctrl.GetId())
-                event.m_itemIndex = item_index
-                event.SetEventObject(list_ctrl)
-                wx.PostEvent(list_ctrl, event)
+                # НЕ генерируем событие выбора, чтобы не было двойного выбора
+                # event = wx.ListEvent(wx.wxEVT_LIST_ITEM_SELECTED, list_ctrl.GetId())
+                # event.m_itemIndex = item_index
+                # event.SetEventObject(list_ctrl)
+                # wx.PostEvent(list_ctrl, event)
                 found = True
-                logger.debug(f"[ModsTab/SelectByID] Мод {mod_id} найден и выделен в списке {list_ctrl.GetName()}")
+                logger.info(f"[ModsTab/SelectByID] Мод {mod_id} выделен в списке {list_name}")
                 break
+            else:
+                logger.info(f"[ModsTab/SelectByID] Мод {mod_id} не найден в {list_name}")
+                
         if not found:
             logger.warning(f"[ModsTab/SelectByID] Мод {mod_id} не найден ни в одном списке.")
+            # Показываем первые несколько ID из списков для отладки
+            if self.enabled_list and self.enabled_list.GetItemCount() > 0:
+                sample_ids = [self.enabled_list.GetItemText(i, self.COL_ID) for i in range(min(3, self.enabled_list.GetItemCount()))]
+                logger.info(f"[ModsTab/SelectByID] Примеры ID в enabled_list: {sample_ids}")
+            if self.disabled_list and self.disabled_list.GetItemCount() > 0:
+                sample_ids = [self.disabled_list.GetItemText(i, self.COL_ID) for i in range(min(3, self.disabled_list.GetItemCount()))]
+                logger.info(f"[ModsTab/SelectByID] Примеры ID в disabled_list: {sample_ids}")
+            
             wx.MessageBox(f"Мод с ID {mod_id} не найден в списке установленных модов.", "Не найден", wx.OK | wx.ICON_INFORMATION)
+
+    def _highlight_all_dependencies(self, dependencies: List[str], installed_mod_ids: Set[str]):
+        """Подсвечивает все установленные зависимости в списках"""
+        if not dependencies or not installed_mod_ids:
+            return
+            
+        logger.info(f"[ModsTab/HighlightDeps] Подсветка {len(dependencies)} зависимостей")
+        
+        # Сначала убираем предыдущую подсветку
+        self._clear_all_dependency_highlights()
+        
+        # Подсвечиваем каждую установленную зависимость
+        highlighted_count = 0
+        for dep_id in dependencies:
+            if dep_id in installed_mod_ids:
+                # Ищем мод в списках
+                for list_ctrl in [self.disabled_list, self.enabled_list]:
+                    item_index = self._find_mod_item_index_by_id(list_ctrl, dep_id)
+                    if item_index != wx.NOT_FOUND:
+                        # Подсвечиваем мод
+                        item = wx.ListItem()
+                        item.SetId(item_index)
+                        item.SetBackgroundColour(wx.Colour(144, 238, 144))  # Светло-зеленый
+                        list_ctrl.SetItem(item)
+                        highlighted_count += 1
+                        logger.debug(f"[ModsTab/HighlightDeps] Подсвечена зависимость: {dep_id}")
+                        break
+        
+        logger.info(f"[ModsTab/HighlightDeps] Подсвечено {highlighted_count} зависимостей")
+
+    def _clear_all_dependency_highlights(self):
+        """Убирает подсветку всех зависимостей"""
+        logger.info(f"[ModsTab/HighlightDeps] Начало очистки подсветки зависимостей")
+        for list_ctrl in [self.disabled_list, self.enabled_list]:
+            item_count = list_ctrl.GetItemCount()
+            logger.debug(f"[ModsTab/HighlightDeps] Очистка списка с {item_count} элементами")
+            for i in range(item_count):
+                # Восстанавливаем стандартный цвет фона
+                item = wx.ListItem()
+                item.SetId(i)
+                item.SetBackgroundColour(list_ctrl.GetBackgroundColour())
+                list_ctrl.SetItem(item)
+        logger.debug(f"[ModsTab/HighlightDeps] Убрана подсветка всех зависимостей")
 
     def _highlight_dependency(self, list_ctrl: wx.ListCtrl, item_index: int):
         """Временно выделяет мод зеленым цветом как зависимость"""
@@ -616,7 +751,7 @@ class ModsTab(wx.Panel):
         self.highlighted_item = item_index
         
         # Устанавливаем зеленый фон для элемента
-        item = wx.ListViewItem()
+        item = wx.ListItem()
         item.SetId(item_index)
         item.SetBackgroundColour(wx.Colour(144, 238, 144))  # Светло-зеленый
         list_ctrl.SetItem(item)
@@ -630,7 +765,7 @@ class ModsTab(wx.Panel):
         """Убирает временное выделение зависимостей"""
         if self.highlighted_list and self.highlighted_item is not None:
             # Восстанавливаем обычный цвет фона
-            item = wx.ListViewItem()
+            item = wx.ListItem()
             item.SetId(self.highlighted_item)
             item.SetBackgroundColour(wx.NullColour)  # Стандартный цвет
             self.highlighted_list.SetItem(item)
@@ -1053,48 +1188,159 @@ class ModsTab(wx.Panel):
         else:
             wx.LaunchDefaultBrowser(url)
 
+    def _get_mod_folder_update_time(self, mod: Mod) -> Optional[datetime]:
+        """Получает дату последнего изменения папки мода"""
+        try:
+            if not mod.local_path or not os.path.exists(mod.local_path):
+                logger.debug(f"[ModsTab/UpdateTime] Папка мода {mod.mod_id} не найдена: {mod.local_path}")
+                return None
+            
+            # Получаем время последнего изменения папки
+            folder_time = os.path.getmtime(mod.local_path)
+            return datetime.fromtimestamp(folder_time)
+        except Exception as e:
+            logger.error(f"[ModsTab/UpdateTime] Ошибка получения времени папки для {mod.mod_id}: {e}")
+            return None
+
+    def _check_mod_updates_with_local_data(self) -> Dict[str, Dict[str, Any]]:
+        """Проверяет обновления модов сравнивая локальные данные с Steam"""
+        if not self.current_game:
+            return {}
+        
+        all_mods = self.mod_manager.get_installed_mods(self.current_game.steam_id)
+        update_info = {}
+        
+        logger.info(f"[ModsTab/CheckUpdates] Проверка {len(all_mods)} модов на обновления")
+        
+        for mod in all_mods:
+            try:
+                mod_update_info = {
+                    'mod_id': mod.mod_id,
+                    'name': mod.name or mod.mod_id,
+                    'local_update': mod.local_update_date,
+                    'steam_update': mod.updated_date,
+                    'folder_update': self._get_mod_folder_update_time(mod),
+                    'needs_update': False,
+                    'status': 'unknown'
+                }
+                
+                # Детальное логирование для одного мода
+                logger.debug(f"[ModsTab/CheckUpdates] Мод {mod.mod_id}:")
+                logger.debug(f"  - local_update: {mod.local_update_date}")
+                logger.debug(f"  - steam_update: {mod.updated_date}")
+                logger.debug(f"  - folder_update: {mod_update_info['folder_update']}")
+                
+                # Получаем данные из Steam для актуальной информации
+                details = self.steam_workshop_service.get_mod_details(mod.mod_id, force_refresh=True)
+                
+                if details:
+                    steam_updated_date = details.get('updated_date')
+                    logger.debug(f"[ModsTab/CheckUpdates] Мод {mod.mod_id}: Steam дата обновления = {steam_updated_date}")
+                    
+                    # Сравниваем даты для определения необходимости обновления
+                    if mod_update_info['folder_update'] and steam_updated_date:
+                        if steam_updated_date > mod_update_info['folder_update']:
+                            mod_update_info['needs_update'] = True
+                            mod_update_info['status'] = 'needs_update'
+                            logger.info(f"[ModsTab/CheckUpdates] Мод {mod.mod_id} требует обновления (Steam: {steam_updated_date} > Local: {mod_update_info['folder_update']})")
+                        else:
+                            mod_update_info['status'] = 'up_to_date'
+                            logger.debug(f"[ModsTab/CheckUpdates] Мод {mod.mod_id} актуален (Steam: {steam_updated_date} <= Local: {mod_update_info['folder_update']})")
+                    else:
+                        mod_update_info['status'] = 'missing_data'
+                        logger.warning(f"[ModsTab/CheckUpdates] Мод {mod.mod_id}: отсутствуют данные для сравнения (local={mod_update_info['folder_update']}, steam={steam_updated_date})")
+                else:
+                    mod_update_info['status'] = 'no_steam_data'
+                    logger.warning(f"[ModsTab/CheckUpdates] Мод {mod.mod_id}: не удалось получить данные из Steam")
+                
+                update_info[mod.mod_id] = mod_update_info
+                    
+            except Exception as e:
+                logger.error(f"[ModsTab/CheckUpdates] Ошибка при проверке мода {mod.mod_id}: {e}")
+        
+        logger.info(f"[ModsTab/CheckUpdates] Проверка завершена. Найдено обновлений: {sum(1 for info in update_info.values() if info.get('needs_update', False))}")
+        return update_info
+
     def _on_check_updates(self, event):
-        """Проверка обновлений с принудительной загрузкой данных"""
+        """Проверка обновлений с использованием локальных данных и Steam"""
         if not self.current_game:
             wx.MessageBox("Сначала выберите игру.", "Ошибка", wx.OK | wx.ICON_WARNING)
-            return
-        
-        # Очищаем кэш для всех модов текущей игры
-        all_mods = self.mod_manager.get_installed_mods(self.current_game.steam_id)
-        mod_ids = [mod.mod_id for mod in all_mods]
-        
-        if not mod_ids:
-            wx.MessageBox("Нет установленных модов для проверки.", "Информация", wx.OK | wx.ICON_INFORMATION)
             return
         
         # Показываем диалог прогресса
         progress_dialog = wx.ProgressDialog(
             "Проверка обновлений",
-            "Очистка кэша и загрузка данных...",
-            maximum=len(mod_ids),
+            "Анализ локальных данных и проверка Steam...",
+            maximum=100,
             parent=self,
             style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_CAN_ABORT
         )
         
         def check_updates_task():
             try:
-                # Очищаем кэш для всех модов
-                for i, mod_id in enumerate(mod_ids):
-                    if not progress_dialog.Update(i, f"Очистка кэша для мода {mod_id}"):
+                # Шаг 1: Локальная проверка (быстрая)
+                if not progress_dialog.Update(10, "Проверка локальных данных..."):
+                    progress_dialog.Destroy()
+                    return
+                
+                update_info = self._check_mod_updates_with_local_data()
+                
+                # Шаг 2: Обновление данных из Steam для модов с устаревшими данными
+                if not progress_dialog.Update(30, "Обновление данных из Steam..."):
+                    progress_dialog.Destroy()
+                    return
+                
+                # Получаем моды, которые нужно обновить или у которых нет данных
+                mods_to_refresh = []
+                for mod_id, info in update_info.items():
+                    if info['status'] in ['no_data', 'unknown']:
+                        mods_to_refresh.append(mod_id)
+                
+                if mods_to_refresh:
+                    logger.info(f"[ModsTab/CheckUpdates] Обновление {len(mods_to_refresh)} модов из Steam")
+                    results = self.steam_workshop_service.preload_missing_mods(mods_to_refresh)
+                    
+                    # Повторная проверка после обновления данных
+                    if not progress_dialog.Update(80, "Повторная проверка..."):
                         progress_dialog.Destroy()
                         return
                     
-                    self.steam_workshop_service.invalidate_cache(mod_id)
+                    update_info = self._check_mod_updates_with_local_data()
                 
-                # Загружаем обновленные данные
-                results = self.steam_workshop_service.preload_missing_mods(mod_ids)
+                # Шаг 3: Показ результатов
+                if not progress_dialog.Update(95, "Подготовка отчета..."):
+                    progress_dialog.Destroy()
+                    return
                 
-                # Обновляем интерфейс
-                wx.CallAfter(self._refresh_all_mod_data, results)
+                # Считаем статистику
+                total_mods = len(update_info)
+                needs_update = sum(1 for info in update_info.values() if info['needs_update'])
+                up_to_date = sum(1 for info in update_info.values() if info['status'] == 'up_to_date')
+                no_data = sum(1 for info in update_info.values() if info['status'] == 'no_data')
+                
+                # Формируем сообщение с результатами
+                message_parts = [
+                    f"Всего модов: {total_mods}",
+                    f"Требуют обновления: {needs_update}",
+                    f"Актуальны: {up_to_date}",
+                    f"Нет данных: {no_data}"
+                ]
+                
+                if needs_update > 0:
+                    message_parts.append("\n\nМоды, требующие обновления:")
+                    for mod_id, info in update_info.items():
+                        if info['needs_update']:
+                            message_parts.append(f"• {info['name']} ({mod_id})")
+                
+                wx.CallAfter(progress_dialog.Update, 100, "Готово")
                 wx.CallAfter(progress_dialog.Destroy)
                 wx.CallAfter(wx.MessageBox, 
-                           f"Проверка завершена. Обновлено {sum(results.values())} из {len(mod_ids)} модов.", 
-                           "Готово", wx.OK | wx.ICON_INFORMATION)
+                           "\n".join(message_parts), 
+                           "Результаты проверки обновлений", 
+                           wx.OK | wx.ICON_INFORMATION)
+                
+                # Обновляем интерфейс
+                wx.CallAfter(self._refresh_mods_display)
                 
             except Exception as e:
                 logger.error(f"[ModsTab/CheckUpdates] Ошибка: {e}")
@@ -1103,6 +1349,21 @@ class ModsTab(wx.Panel):
         
         # Запускаем в отдельном потоке
         threading.Thread(target=check_updates_task, daemon=True).start()
+
+    def _refresh_mods_display(self):
+        """Обновляет отображение модов после проверки обновлений"""
+        try:
+            # Перезагружаем текущий выбранный мод, если есть
+            if self.selected_mod_id:
+                details = self.steam_workshop_service.get_mod_details(self.selected_mod_id)
+                if details:
+                    self.mod_details[self.selected_mod_id] = details
+                    self._display_mod_info(self.selected_mod_id, details)
+            
+            # Обновляем списки если нужно
+            logger.info(f"[ModsTab/Refresh] Интерфейс обновлен")
+        except Exception as e:
+            logger.error(f"[ModsTab/Refresh] Ошибка обновления интерфейса: {e}")
 
     def _on_update_all_mods(self, event):
         """Обновление всех модов (пока просто проверка)"""
@@ -1267,7 +1528,8 @@ class ModsTab(wx.Panel):
     def Destroy(self):
         self.names_aborted = True
         self.loading_aborted = True
-        self._clear_dependency_highlight()  # Очищаем выделение зависимостей
+        # Очищаем подсветку зависимостей при закрытии
+        self._clear_all_dependency_highlights()
         if HAS_EVENT_BUS and event_bus:
             event_bus.unsubscribe("mods_updated", self._on_mods_updated_event)
         self._hide_names_loading_dialog()
