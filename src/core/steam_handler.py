@@ -3,8 +3,10 @@ import os
 import subprocess
 import tempfile
 import shutil
+import time
 from typing import List, Callable, Optional
 from loguru import logger
+from src.core.process_monitor import CacheManager
 
 class SteamHandler:
     """Обработчик SteamCMD"""
@@ -12,6 +14,7 @@ class SteamHandler:
     def __init__(self, steamcmd_path: str):
         self.steamcmd_path = steamcmd_path
         self.is_initialized = self._check_steamcmd()
+        self.cache_manager = CacheManager()
 
     def _check_steamcmd(self) -> bool:
         """Проверка доступности SteamCMD"""
@@ -39,10 +42,10 @@ login anonymous
         script_content += "quit\n"
         return script_content
 
-    # Модифицируем download_mods для поддержки log_callback
+    # Модифицируем download_mods для поддержки log_callback и кэширования
     def download_mods(self, app_id: str, mod_ids: List[str], log_callback: Optional[Callable[[str], None]] = None) -> bool:
         """
-        Скачивание модов через SteamCMD.
+        Скачивание модов через SteamCMD с поддержкой кэширования.
 
         :param app_id: ID приложения Steam.
         :param mod_ids: Список ID модов для загрузки.
@@ -61,6 +64,20 @@ login anonymous
             if log_callback:
                 log_callback("-> Нет модов для загрузки.")
             return True
+
+        # Проверяем кэш перед загрузкой
+        cache_key = self.cache_manager.get_steam_mods_cache_key(app_id, mod_ids)
+        cached_result = self.cache_manager.get(cache_key)
+        
+        if cached_result is not None:
+            logger.info(f"Используем кэшированный результат для {len(mod_ids)} модов")
+            if log_callback:
+                log_callback(f"-> Используем кэшированные данные для {len(mod_ids)} модов")
+                if cached_result.get('success'):
+                    log_callback("=== Моды уже загружены (из кэша) ===")
+                else:
+                    log_callback("!!! Предыдущая загрузка не удалась (из кэша) !!!")
+            return cached_result.get('success', False)
 
         # --- ДОПОЛНИТЕЛЬНАЯ ОЧИСТКА КЭША ПЕРЕД ЗАГРУЗКОЙ ---
         # Выполняем очистку перед каждой загрузкой для минимизации проблем с кэшем
@@ -106,6 +123,10 @@ login anonymous
 
             process.wait()
             success = process.returncode == 0
+            
+            # Сохраняем результат в кэш на 5 минут (300 секунд)
+            self.cache_manager.set(cache_key, {'success': success}, ttl=300.0)
+            
             logger.info(f"SteamCMD завершен с кодом: {process.returncode}")
             if log_callback:
                 if success:
@@ -115,6 +136,8 @@ login anonymous
             return success
 
         except Exception as e:
+            # Сохраняем ошибку в кэш на 1 минуту (60 секунд)
+            self.cache_manager.set(cache_key, {'success': False, 'error': str(e)}, ttl=60.0)
             logger.error(f"Ошибка при запуске SteamCMD: {e}")
             if log_callback:
                 log_callback(f"!!! ОШИБКА запуска SteamCMD: {e}")
@@ -125,6 +148,55 @@ login anonymous
                     os.remove(script_path)
                 except OSError as remove_e:
                     logger.warning(f"Не удалось удалить временный скрипт {script_path}: {remove_e}")
+
+    def check_game_status(self, app_id: str, log_callback: Optional[Callable[[str], None]] = None) -> Optional[dict]:
+        """
+        Проверка статуса игры через Steam с кэшированием.
+        
+        :param app_id: ID приложения Steam.
+        :param log_callback: Опциональная функция обратного вызова.
+        :return: Словарь с информацией о статусе или None в случае ошибки.
+        """
+        cache_key = self.cache_manager.get_steam_game_info_cache_key(app_id)
+        cached_info = self.cache_manager.get(cache_key)
+        
+        if cached_info is not None:
+            logger.debug(f"Используем кэшированную информацию об игре {app_id}")
+            if log_callback:
+                log_callback(f"-> Информация об игре {app_id} из кэша")
+            return cached_info
+        
+        # Здесь можно добавить реальный запрос к Steam API
+        # Пока возвращаем базовую информацию и кэшируем на 10 минут
+        game_info = {
+            'app_id': app_id,
+            'name': f'Game {app_id}',
+            'status': 'unknown',
+            'last_checked': time.time()
+        }
+        
+        # Кэшируем на 10 минут (600 секунд)
+        self.cache_manager.set(cache_key, game_info, ttl=600.0)
+        
+        logger.debug(f"Получена информация об игре {app_id}")
+        return game_info
+
+    def invalidate_cache(self, app_id: str = None, mod_ids: List[str] = None):
+        """
+        Инвалидация кэша для конкретной игры или модов.
+        
+        :param app_id: ID приложения (опционально).
+        :param mod_ids: Список ID модов (опционально).
+        """
+        if app_id and mod_ids:
+            cache_key = self.cache_manager.get_steam_mods_cache_key(app_id, mod_ids)
+            self.cache_manager.invalidate(cache_key)
+            logger.info(f"Кэш инвалидирован для модов игры {app_id}")
+        
+        if app_id:
+            cache_key = self.cache_manager.get_steam_game_info_cache_key(app_id)
+            self.cache_manager.invalidate(cache_key)
+            logger.info(f"Кэш инвалидирован для игры {app_id}")
 
     # Модифицируем clean_cache для удаления дополнительных файлов/папок
     def clean_cache(self, steamcmd_base_path: str, app_id: str, log_callback: Optional[Callable[[str], None]] = None):

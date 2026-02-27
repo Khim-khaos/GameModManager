@@ -15,6 +15,7 @@ from src.core.settings_manager import SettingsManager
 from src.core.language_manager import LanguageManager
 from src.core.steam_handler import SteamHandler
 from src.core.download_manager import DownloadManager
+from src.core.status_monitor import StatusMonitor
 from src.ui.dialogs.add_game_dialog import AddGameDialog
 # --- Импорт новых диалогов ---
 from src.ui.dialogs.edit_game_dialog import EditGameDialog
@@ -48,6 +49,7 @@ class MainWindow(wx.Frame):
         # --- Инициализация новых сервисов ---
         self.steam_workshop_service = SteamWorkshopService()
         self.task_manager = TaskManager()
+        self.status_monitor = StatusMonitor(self.game_manager, update_interval=3.0)
         # -----------------------------------
 
         # Текущая выбранная игра
@@ -139,9 +141,15 @@ class MainWindow(wx.Frame):
         # --- Подписка на новое событие ---
         event_bus.subscribe("game_updated", self._on_game_list_changed)
         # ---------------------------------
+        event_bus.subscribe("game_started", self._on_game_status_changed)
+        event_bus.subscribe("game_stopped", self._on_game_status_changed)
         event_bus.subscribe("language_changed", self._on_language_changed)
         event_bus.subscribe("open_mod_in_browser", self._on_open_mod_in_browser)
         event_bus.subscribe("mods_updated", self._on_mods_updated)
+        
+        # Запускаем мониторинг статуса игр
+        self.status_monitor.add_status_callback(self._on_game_status_callback)
+        self.status_monitor.start()
 
     # --- ИСПРАВЛЕННЫЙ _update_game_list ---
     def _update_game_list(self):
@@ -452,6 +460,25 @@ class MainWindow(wx.Frame):
             # Но лучше пусть ModsTab сам обрабатывает событие
             pass
 
+    def _on_game_status_changed(self, steam_id):
+        """Обработчик изменения статуса игры через события"""
+        wx.CallAfter(self._update_game_status_ui)
+    
+    def _on_game_status_callback(self, steam_id: str, is_running: bool):
+        """Callback от мониторинга статуса"""
+        wx.CallAfter(self._update_game_status_ui)
+    
+    def _update_game_status_ui(self):
+        """Обновление UI статуса игры"""
+        try:
+            if self.current_game:
+                is_running = self.game_manager.is_game_running(self.current_game.steam_id)
+                # Здесь можно обновить индикатор статуса в интерфейсе
+                # Например, изменить цвет или добавить иконку
+                logger.debug(f"Статус игры {self.current_game.name}: {'Запущена' if is_running else 'Остановлена'}")
+        except Exception as e:
+            logger.error(f"Ошибка обновления статуса UI: {e}")
+
     # --- Добавлен недостающий метод _on_settings ---
     def _on_settings(self, event):
         """Обработчик нажатия кнопки 'Настройки'."""
@@ -466,6 +493,10 @@ class MainWindow(wx.Frame):
         self.Close()
 
     def Close(self, force=False):
+        # Останавливаем мониторинг статуса
+        if hasattr(self, 'status_monitor'):
+            self.status_monitor.stop()
+        
         # Завершаем работу TaskManager при закрытии приложения
         if hasattr(self, 'task_manager'):
             self.task_manager.shutdown(wait=False) # Не блокируем UI при закрытии

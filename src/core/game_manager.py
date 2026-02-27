@@ -4,18 +4,19 @@
 """
 import os
 import json
-import psutil
 from typing import List, Optional
 from loguru import logger
 from src.constants import GAMES_CONFIG_FILE
 from src.models.game import Game
 from src.event_bus import event_bus
+from src.core.process_monitor import ProcessMonitor
 
 class GameManager:
     """Менеджер игр"""
 
     def __init__(self):
         self._games: List[Game] = []
+        self.process_monitor = ProcessMonitor()
         self._load_games()
 
     def _load_games(self):
@@ -167,7 +168,36 @@ class GameManager:
         """Проверка, запущена ли игра"""
         game = self.get_game_by_steam_id(steam_id)
         if game:
-            # Здесь должна быть логика проверки запущенного процесса
-            # Пока используем флаг из модели
-            return game.is_running
+            # Используем мониторинг процессов для реальной проверки
+            return self.process_monitor.is_game_running(game.executable_path)
         return False
+    
+    def update_all_games_status(self):
+        """Обновление статуса всех игр"""
+        updated_games = []
+        for game in self._games:
+            old_status = game.is_running
+            new_status = self.is_game_running(game.steam_id)
+            
+            if old_status != new_status:
+                game.is_running = new_status
+                updated_games.append(game)
+                
+                # Эмитируем событие об изменении статуса
+                if new_status:
+                    event_bus.emit("game_started", game.steam_id)
+                    logger.info(f"Игра {game.name} запущена")
+                else:
+                    event_bus.emit("game_stopped", game.steam_id)
+                    logger.info(f"Игра {game.name} остановлена")
+        
+        if updated_games:
+            self._save_games()
+            logger.debug(f"Обновлен статус {len(updated_games)} игр")
+        
+        return updated_games
+    
+    def get_running_games(self) -> List[Game]:
+        """Получение списка запущенных игр"""
+        self.update_all_games_status()
+        return [game for game in self._games if game.is_running]
