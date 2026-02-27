@@ -105,6 +105,7 @@ class ModsTab(wx.Panel):
         self._load_mod_versions()
         if HAS_EVENT_BUS and event_bus:
             event_bus.subscribe("mods_updated", self._on_mods_updated_event)
+            event_bus.subscribe("language_changed", self._on_language_changed)
 
     def _create_ui(self):
         main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -113,8 +114,8 @@ class ModsTab(wx.Panel):
         control_panel = wx.Panel(self)
         control_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        self.check_updates_btn = wx.Button(control_panel, label="Проверить обновления")
-        self.update_all_btn = wx.Button(control_panel, label="Обновить все")
+        self.check_updates_btn = wx.Button(control_panel, label=self.language_manager.get_text("mod.check_updates"))
+        self.update_all_btn = wx.Button(control_panel, label=self.language_manager.get_text("mod.update_all"))
         self.check_updates_btn.Bind(wx.EVT_BUTTON, self._on_check_updates)
         self.update_all_btn.Bind(wx.EVT_BUTTON, self._on_update_all_mods)
         
@@ -128,30 +129,35 @@ class ModsTab(wx.Panel):
         self.main_splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE | wx.SP_3D)
         self.main_splitter.SetMinimumPaneSize(150)
         self.info_panel = wx.Panel(self.main_splitter)
-        info_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        info_sizer = wx.BoxSizer(wx.VERTICAL)  # Изменено на VERTICAL для вертикального расположения
+        
+        # Изображение вверху
         self.mod_image = wx.StaticBitmap(self.info_panel, bitmap=wx.NullBitmap, size=self.MOD_IMAGE_SIZE)
-        info_sizer.Add(self.mod_image, 0, wx.ALL, 10)
-        right_panel = wx.Panel(self.info_panel)
-        right_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.mod_info_panel = wx.ScrolledWindow(right_panel, style=wx.VSCROLL)
+        info_sizer.Add(self.mod_image, 0, wx.ALIGN_CENTER | wx.ALL, 10)
+        
+        # Панель с информацией под изображением
+        self.mod_info_panel = wx.ScrolledWindow(self.info_panel, style=wx.VSCROLL)
         self.mod_info_panel.SetScrollRate(5, 5)
         self.mod_info_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.mod_title_label = wx.StaticText(self.mod_info_panel, label="Название: ")
-        self.mod_author_label = wx.StaticText(self.mod_info_panel, label="Автор: ")
-        self.mod_id_label = wx.StaticText(self.mod_info_panel, label="ID: ")
-        self.mod_description_label = wx.StaticText(self.mod_info_panel, label="Описание:\n")
-        self.mod_install_label = wx.StaticText(self.mod_info_panel, label="Установлен: ")
-        self.mod_update_label = wx.StaticText(self.mod_info_panel, label="Обновлен Steam: ")
-        self.mod_local_update_label = wx.StaticText(self.mod_info_panel, label="Локальное обновление: ")
-        self.mod_size_label = wx.StaticText(self.mod_info_panel, label="Размер: ")
-        self.mod_tags_label = wx.StaticText(self.mod_info_panel, label="Теги: ")
+        self.mod_title_label = wx.StaticText(self.mod_info_panel, label=f"{self.language_manager.get_text('mod.name')}: ")
+        self.mod_author_label = wx.StaticText(self.mod_info_panel, label=f"{self.language_manager.get_text('mod.author')}: ")
+        self.mod_id_label = wx.StaticText(self.mod_info_panel, label=f"{self.language_manager.get_text('mod.id')}: ")
+        self.mod_description_label = wx.TextCtrl(self.mod_info_panel, value=f"{self.language_manager.get_text('mod.description')}:\n", style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.BORDER_NONE)
+        self.mod_description_label.SetMinSize((-1, 100))  # Минимальная высота 100 пикселей
+        self.mod_install_label = wx.StaticText(self.mod_info_panel, label=f"{self.language_manager.get_text('mod.installed')}: ")
+        self.mod_update_label = wx.StaticText(self.mod_info_panel, label=f"{self.language_manager.get_text('mod.steam_updated')}: ")
+        self.mod_local_update_label = wx.StaticText(self.mod_info_panel, label=f"{self.language_manager.get_text('mod.local_updated')}: ")
+        self.mod_size_label = wx.StaticText(self.mod_info_panel, label=f"{self.language_manager.get_text('mod.size')}: ")
+        self.mod_tags_label = wx.StaticText(self.mod_info_panel, label=f"{self.language_manager.get_text('mod.tags')}: ")
         self.mod_tags_panel = wx.Panel(self.mod_info_panel)
         self.mod_tags_sizer = wx.WrapSizer(wx.HORIZONTAL, wx.WRAPSIZER_DEFAULT_FLAGS)
         self.mod_tags_panel.SetSizer(self.mod_tags_sizer)
-        self.mod_deps_label = wx.StaticText(self.mod_info_panel, label="Зависимости: ")
+        self.mod_deps_label = wx.StaticText(self.mod_info_panel, label=f"{self.language_manager.get_text('mod.dependencies')}: ")
         self.mod_deps_panel = wx.Panel(self.mod_info_panel)
         self.mod_deps_sizer = wx.BoxSizer(wx.VERTICAL)
         self.mod_deps_panel.SetSizer(self.mod_deps_sizer)
+        
+        # Добавляем все элементы информации в вертикальный sizer
         self.mod_info_sizer.Add(self.mod_title_label, 0, wx.EXPAND | wx.ALL, 2)
         self.mod_info_sizer.Add(self.mod_author_label, 0, wx.EXPAND | wx.ALL, 2)
         self.mod_info_sizer.Add(self.mod_id_label, 0, wx.EXPAND | wx.ALL, 2)
@@ -164,10 +170,9 @@ class ModsTab(wx.Panel):
         self.mod_info_sizer.Add(self.mod_tags_panel, 0, wx.EXPAND | wx.LEFT, 10)
         self.mod_info_sizer.Add(self.mod_deps_label, 0, wx.EXPAND | wx.ALL, 2)
         self.mod_info_sizer.Add(self.mod_deps_panel, 0, wx.EXPAND | wx.LEFT, 10)
+        
         self.mod_info_panel.SetSizer(self.mod_info_sizer)
-        right_sizer.Add(self.mod_info_panel, 1, wx.EXPAND | wx.ALL, 5)
-        right_panel.SetSizer(right_sizer)
-        info_sizer.Add(right_panel, 1, wx.EXPAND)
+        info_sizer.Add(self.mod_info_panel, 1, wx.EXPAND | wx.ALL, 5)  # Информация занимает всё оставшееся пространство
         self.info_panel.SetSizer(info_sizer)
         self.lists_splitter = wx.SplitterWindow(self.main_splitter, style=wx.SP_LIVE_UPDATE | wx.SP_3D)
         self.lists_splitter.SetMinimumPaneSize(100)
@@ -184,14 +189,14 @@ class ModsTab(wx.Panel):
     def _create_disabled_mods_panel(self, parent):
         self.disabled_panel = wx.Panel(parent)
         panel_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.disabled_title = wx.StaticText(self.disabled_panel, label="Отключённые моды (0)")
+        self.disabled_title = wx.StaticText(self.disabled_panel, label=f"{self.language_manager.get_text('mod.disabled_mods')} (0)")
         font = self.disabled_title.GetFont()
         font.PointSize += 2
         font = font.Bold()
         self.disabled_title.SetFont(font)
         panel_sizer.Add(self.disabled_title, 0, wx.ALL, 5)
         search_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        search_label = wx.StaticText(self.disabled_panel, label="Поиск:")
+        search_label = wx.StaticText(self.disabled_panel, label=f"{self.language_manager.get_text('mod.search')}:")
         self.disabled_search_ctrl = wx.SearchCtrl(self.disabled_panel, style=wx.TE_PROCESS_ENTER)
         self.disabled_search_ctrl.ShowCancelButton(True)
         self.disabled_search_ctrl.Bind(wx.EVT_TEXT, self._on_disabled_search)
@@ -201,12 +206,11 @@ class ModsTab(wx.Panel):
         search_sizer.Add(self.disabled_search_ctrl, 1, wx.EXPAND)
         panel_sizer.Add(search_sizer, 0, wx.EXPAND | wx.ALL, 5)
         self.disabled_list = wx.ListCtrl(self.disabled_panel, style=wx.LC_REPORT)
-        self.disabled_list.AppendColumn("Название", width=200)
-        self.disabled_list.AppendColumn("ID", width=120)
-        self.disabled_list.AppendColumn("Статус", width=80)
-        self.disabled_list.AppendColumn("Установлен", width=120)
-        self.disabled_list.AppendColumn("Обновлён", width=120)
-        self.disabled_list.AppendColumn("Размер", width=80)
+        self.disabled_list.AppendColumn(self.language_manager.get_text("mod.name"), width=200)
+        self.disabled_list.AppendColumn(self.language_manager.get_text("mod.author"), width=150)
+        self.disabled_list.AppendColumn(self.language_manager.get_text("mod.updated"), width=150)
+        self.disabled_list.AppendColumn(self.language_manager.get_text("mod.steam_updated"), width=150)
+        self.disabled_list.AppendColumn(self.language_manager.get_text("mod.size"), width=100)
         self.disabled_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_mod_selected)
         self.disabled_list.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self._on_mod_right_click)
         self.disabled_list.Bind(wx.EVT_LIST_COL_CLICK, self._on_column_click_disabled)
@@ -217,14 +221,14 @@ class ModsTab(wx.Panel):
     def _create_enabled_mods_panel(self, parent):
         self.enabled_panel = wx.Panel(parent)
         panel_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.enabled_title = wx.StaticText(self.enabled_panel, label="Включённые моды (0)")
+        self.enabled_title = wx.StaticText(self.enabled_panel, label=f"{self.language_manager.get_text('mod.enabled_mods')} (0)")
         font = self.enabled_title.GetFont()
         font.PointSize += 2
         font = font.Bold()
         self.enabled_title.SetFont(font)
         panel_sizer.Add(self.enabled_title, 0, wx.ALL, 5)
         search_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        search_label = wx.StaticText(self.enabled_panel, label="Поиск:")
+        search_label = wx.StaticText(self.enabled_panel, label=f"{self.language_manager.get_text('mod.search')}:")
         self.enabled_search_ctrl = wx.SearchCtrl(self.enabled_panel, style=wx.TE_PROCESS_ENTER)
         self.enabled_search_ctrl.ShowCancelButton(True)
         self.enabled_search_ctrl.Bind(wx.EVT_TEXT, self._on_enabled_search)
@@ -234,12 +238,12 @@ class ModsTab(wx.Panel):
         search_sizer.Add(self.enabled_search_ctrl, 1, wx.EXPAND)
         panel_sizer.Add(search_sizer, 0, wx.EXPAND | wx.ALL, 5)
         self.enabled_list = wx.ListCtrl(self.enabled_panel, style=wx.LC_REPORT)
-        self.enabled_list.AppendColumn("Название", width=200)
-        self.enabled_list.AppendColumn("ID", width=120)
-        self.enabled_list.AppendColumn("Статус", width=80)
-        self.enabled_list.AppendColumn("Установлен", width=120)
-        self.enabled_list.AppendColumn("Обновлён", width=120)
-        self.enabled_list.AppendColumn("Размер", width=80)
+        self.enabled_list.AppendColumn(self.language_manager.get_text("mod.name"), width=200)
+        self.enabled_list.AppendColumn(self.language_manager.get_text("mod.id"), width=120)
+        self.enabled_list.AppendColumn("Status", width=80)  # Оставляем как есть, это техническое поле
+        self.enabled_list.AppendColumn(self.language_manager.get_text("mod.installed"), width=120)
+        self.enabled_list.AppendColumn(self.language_manager.get_text("mod.updated"), width=120)
+        self.enabled_list.AppendColumn(self.language_manager.get_text("mod.size"), width=80)
         self.enabled_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_mod_selected)
         self.enabled_list.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self._on_mod_right_click)
         self.enabled_list.Bind(wx.EVT_LIST_COL_CLICK, self._on_column_click_enabled)
@@ -258,13 +262,13 @@ class ModsTab(wx.Panel):
             if game and not Path(game.mods_path).exists():
                 logger.warning(f"[ModsTab] Папка модов не существует: {game.mods_path}")
             return
-        self.task_manager.submit_task(self._load_mods_async_task, game.steam_id, description=f"Загрузка модов для {game.name}")
+        self.task_manager.submit_task(self._load_mods_async_task, game.steam_id, description=f"{self.language_manager.get_text('mod.loading_mods')} {game.name}")
 
     def _load_mods_async_task(self, steam_id: str):
         try:
             if not self.current_game:
                 logger.error("[ModsTab/LoadAsync] current_game не установлен!")
-                wx.CallAfter(wx.MessageBox, "Ошибка: Игра не выбрана для загрузки модов.", "Ошибка", wx.OK | wx.ICON_ERROR)
+                wx.CallAfter(wx.MessageBox, f"{self.language_manager.get_text('mod.error')}: {self.language_manager.get_text('mod.game_not_selected')}", self.language_manager.get_text("mod.error"), wx.OK | wx.ICON_ERROR)
                 return
             logger.debug(f"[ModsTab/LoadAsync] Вызов load_mods_for_game для игры {self.current_game.name} (ID: {self.current_game.steam_id})")
             _ = self.mod_manager.load_mods_for_game(self.current_game)
@@ -529,23 +533,23 @@ class ModsTab(wx.Panel):
                 local_update_date = version_info.get('local_update_date', 'Неизвестно')
             
             if self.mod_title_label:
-                self.mod_title_label.SetLabel(f"Название: {title}")
+                self.mod_title_label.SetLabel(f"{self.language_manager.get_text('mod.name')}: {title}")
             if self.mod_author_label:
-                self.mod_author_label.SetLabel(f"Автор: {author}")
+                self.mod_author_label.SetLabel(f"{self.language_manager.get_text('mod.author')}: {author}")
             if self.mod_id_label:
-                self.mod_id_label.SetLabel(f"ID: {mod_id}")
+                self.mod_id_label.SetLabel(f"{self.language_manager.get_text('mod.id')}: {mod_id}")
             if self.mod_description_label:
-                self.mod_description_label.SetLabelText(f"Описание:\n{description}")
+                self.mod_description_label.SetValue(f"{self.language_manager.get_text('mod.description')}:\n{description}")
             if self.mod_install_label:
-                self.mod_install_label.SetLabel(f"Установлен: {install_date}")
+                self.mod_install_label.SetLabel(f"{self.language_manager.get_text('mod.installed')}: {install_date}")
             if self.mod_update_label:
-                self.mod_update_label.SetLabel(f"Обновлен Steam: {updated_date}")
+                self.mod_update_label.SetLabel(f"{self.language_manager.get_text('mod.steam_updated')}: {updated_date}")
             if self.mod_local_update_label:
-                self.mod_local_update_label.SetLabel(f"Локальное обновление: {local_update_date}")
+                self.mod_local_update_label.SetLabel(f"{self.language_manager.get_text('mod.local_updated')}: {local_update_date}")
             if self.mod_size_label:
-                self.mod_size_label.SetLabel(f"Размер: {file_size}")
+                self.mod_size_label.SetLabel(f"{self.language_manager.get_text('mod.size')}: {file_size}")
             if self.mod_tags_label:
-                self.mod_tags_label.SetLabel("Теги: ")
+                self.mod_tags_label.SetLabel(f"{self.language_manager.get_text('mod.tags')}: ")
             if self.mod_tags_sizer:
                 self.mod_tags_sizer.Clear(True)
                 if tags:
@@ -553,11 +557,11 @@ class ModsTab(wx.Panel):
                         tag_text = wx.StaticText(self.mod_tags_panel, label=tag)
                         self.mod_tags_sizer.Add(tag_text, 0, wx.ALL, 2)
                 else:
-                    no_tags_text = wx.StaticText(self.mod_tags_panel, label="Нет тегов")
+                    no_tags_text = wx.StaticText(self.mod_tags_panel, label=self.language_manager.get_text("mod.no_tags"))
                     self.mod_tags_sizer.Add(no_tags_text, 0, wx.ALL, 2)
                 self.mod_tags_panel.Layout()
             if self.mod_deps_label:
-                self.mod_deps_label.SetLabel("Зависимости: ")
+                self.mod_deps_label.SetLabel(f"{self.language_manager.get_text('mod.dependencies')}: ")
             if self.mod_deps_sizer:
                 self.mod_deps_sizer.Clear(True)
                 
@@ -863,28 +867,28 @@ class ModsTab(wx.Panel):
         if not self: return
         try:
             if self.mod_title_label:
-                self.mod_title_label.SetLabel("Название: ")
+                self.mod_title_label.SetLabel(f"{self.language_manager.get_text('mod.name')}: ")
             if self.mod_author_label:
-                self.mod_author_label.SetLabel("Автор: ")
+                self.mod_author_label.SetLabel(f"{self.language_manager.get_text('mod.author')}: ")
             if self.mod_id_label:
-                self.mod_id_label.SetLabel("ID: ")
+                self.mod_id_label.SetLabel(f"{self.language_manager.get_text('mod.id')}: ")
             if self.mod_description_label:
-                self.mod_description_label.SetLabel("Описание:\n")
+                self.mod_description_label.SetValue(f"{self.language_manager.get_text('mod.description')}:\n")
             if self.mod_install_label:
-                self.mod_install_label.SetLabel("Установлен: ")
+                self.mod_install_label.SetLabel(f"{self.language_manager.get_text('mod.installed')}: ")
             if self.mod_update_label:
-                self.mod_update_label.SetLabel("Обновлен Steam: ")
+                self.mod_update_label.SetLabel(f"{self.language_manager.get_text('mod.steam_updated')}: ")
             if self.mod_local_update_label:
-                self.mod_local_update_label.SetLabel("Локальное обновление: ")
+                self.mod_local_update_label.SetLabel(f"{self.language_manager.get_text('mod.local_updated')}: ")
             if self.mod_size_label:
-                self.mod_size_label.SetLabel("Размер: ")
+                self.mod_size_label.SetLabel(f"{self.language_manager.get_text('mod.size')}: ")
             if self.mod_tags_label:
-                self.mod_tags_label.SetLabel("Теги: ")
+                self.mod_tags_label.SetLabel(f"{self.language_manager.get_text('mod.tags')}: ")
             if self.mod_tags_sizer:
                 self.mod_tags_sizer.Clear(True)
                 self.mod_tags_panel.Layout()
             if self.mod_deps_label:
-                self.mod_deps_label.SetLabel("Зависимости: ")
+                self.mod_deps_label.SetLabel(f"{self.language_manager.get_text('mod.dependencies')}: ")
             if self.mod_deps_sizer:
                 self.mod_deps_sizer.Clear(True)
                 self.mod_deps_panel.Layout()
@@ -1091,12 +1095,12 @@ class ModsTab(wx.Panel):
     def _show_mod_context_menu(self, mod_ids: List[str], list_ctrl: wx.ListCtrl):
         if not self: return
         menu = wx.Menu()
-        open_item = menu.Append(wx.ID_ANY, "Открыть в браузере")
-        enable_item = menu.Append(wx.ID_ANY, "Включить")
-        disable_item = menu.Append(wx.ID_ANY, "Отключить")
-        remove_item = menu.Append(wx.ID_ANY, "Удалить")
-        update_item = menu.Append(wx.ID_ANY, "Обновить")
-        check_update_item = menu.Append(wx.ID_ANY, "Проверить обновление")
+        open_item = menu.Append(wx.ID_ANY, self.language_manager.get_text("mod.view_workshop"))
+        enable_item = menu.Append(wx.ID_ANY, self.language_manager.get_text("mod.enable"))
+        disable_item = menu.Append(wx.ID_ANY, self.language_manager.get_text("mod.disable"))
+        remove_item = menu.Append(wx.ID_ANY, self.language_manager.get_text("mod.remove"))
+        update_item = menu.Append(wx.ID_ANY, self.language_manager.get_text("mod.update"))
+        check_update_item = menu.Append(wx.ID_ANY, self.language_manager.get_text("mod.check_updates"))
         mod_objs = []
         if self.current_game:
             mods = self.mod_manager.get_installed_mods(self.current_game.steam_id)
@@ -1320,23 +1324,23 @@ class ModsTab(wx.Panel):
                 
                 # Формируем сообщение с результатами
                 message_parts = [
-                    f"Всего модов: {total_mods}",
-                    f"Требуют обновления: {needs_update}",
-                    f"Актуальны: {up_to_date}",
-                    f"Нет данных: {no_data}"
+                    f"{self.language_manager.get_text('mod.total_mods')}: {total_mods}",
+                    f"{self.language_manager.get_text('mod.mods_require_updates')}: {needs_update}",
+                    f"{self.language_manager.get_text('mod.mods_up_to_date')}: {up_to_date}",
+                    f"{self.language_manager.get_text('mod.mods_no_data')}: {no_data}"
                 ]
                 
                 if needs_update > 0:
-                    message_parts.append("\n\nМоды, требующие обновления:")
+                    message_parts.append(f"\n\n{self.language_manager.get_text('mod.mods_requiring_updates')}")
                     for mod_id, info in update_info.items():
                         if info['needs_update']:
                             message_parts.append(f"• {info['name']} ({mod_id})")
                 
-                wx.CallAfter(progress_dialog.Update, 100, "Готово")
+                wx.CallAfter(progress_dialog.Update, 100, self.language_manager.get_text("mod.ready"))
                 wx.CallAfter(progress_dialog.Destroy)
                 wx.CallAfter(wx.MessageBox, 
                            "\n".join(message_parts), 
-                           "Результаты проверки обновлений", 
+                           self.language_manager.get_text("mod.update_check_results"), 
                            wx.OK | wx.ICON_INFORMATION)
                 
                 # Обновляем интерфейс
@@ -1345,7 +1349,7 @@ class ModsTab(wx.Panel):
             except Exception as e:
                 logger.error(f"[ModsTab/CheckUpdates] Ошибка: {e}")
                 wx.CallAfter(progress_dialog.Destroy)
-                wx.CallAfter(wx.MessageBox, f"Ошибка при проверке обновлений: {e}", "Ошибка", wx.OK | wx.ICON_ERROR)
+                wx.CallAfter(wx.MessageBox, f"{self.language_manager.get_text('mod.error')} {self.language_manager.get_text('mod.check_updates')}: {e}", self.language_manager.get_text("mod.error"), wx.OK | wx.ICON_ERROR)
         
         # Запускаем в отдельном потоке
         threading.Thread(target=check_updates_task, daemon=True).start()
@@ -1517,9 +1521,41 @@ class ModsTab(wx.Panel):
         finally:
             self.names_dialog = None
 
-    def _on_mods_updated_event(self, game_obj: Game):
+    def _on_language_changed(self, lang_code: str):
+        """Обработчик изменения языка"""
+        logger.info(f"[ModsTab] Язык изменен на: {lang_code}")
+        # Обновляем тексты UI
+        self._update_ui_texts()
+        
+    def _update_ui_texts(self):
+        """Обновляет все тексты в интерфейсе"""
+        try:
+            # Обновляем кнопки
+            if hasattr(self, 'check_updates_btn'):
+                self.check_updates_btn.SetLabel(self.language_manager.get_text("mod.check_updates"))
+            if hasattr(self, 'update_all_btn'):
+                self.update_all_btn.SetLabel(self.language_manager.get_text("mod.update_all"))
+            
+            # Обновляем заголовки панелей
+            if hasattr(self, 'disabled_title'):
+                disabled_count = self.disabled_list.GetItemCount() if self.disabled_list else 0
+                self.disabled_title.SetLabel(f"{self.language_manager.get_text('mod.disabled_mods')} ({disabled_count})")
+            if hasattr(self, 'enabled_title'):
+                enabled_count = self.enabled_list.GetItemCount() if self.enabled_list else 0
+                self.enabled_title.SetLabel(f"{self.language_manager.get_text('mod.enabled_mods')} ({enabled_count})")
+            
+            # Обновляем информацию о текущем моде
+            if self.selected_mod_id:
+                self._display_mod_info(self.selected_mod_id)
+            else:
+                self._clear_mod_info()
+                
+        except Exception as e:
+            logger.error(f"[ModsTab] Ошибка обновления текстов UI: {e}")
+
+    def _on_mods_updated_event(self, game_steam_id: str):
         if not self: return
-        if self.current_game and game_obj and self.current_game.steam_id == game_obj.steam_id:
+        if self.current_game and self.current_game.steam_id == game_steam_id:
             logger.info("[ModsTab] Получено событие mods_updated, перезагрузка списка.")
             pass
         else:

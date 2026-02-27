@@ -13,6 +13,7 @@ from src.core.game_manager import GameManager
 from src.core.mod_manager import ModManager
 from src.core.settings_manager import SettingsManager
 from src.core.language_manager import LanguageManager
+from src.core.i18n import _
 from src.core.steam_handler import SteamHandler
 from src.core.download_manager import DownloadManager
 from src.core.status_monitor import StatusMonitor
@@ -65,7 +66,7 @@ class MainWindow(wx.Frame):
 
     def _create_ui(self):
         self.CreateStatusBar()
-        self.SetStatusText("Готов")
+        self.SetStatusText(_("ui.ready"))
         self._create_menu()
         self._create_game_selector_panel()
         self._create_notebook_tabs()
@@ -73,12 +74,12 @@ class MainWindow(wx.Frame):
     def _create_menu(self):
         menubar = wx.MenuBar()
         file_menu = wx.Menu()
-        settings_item = file_menu.Append(wx.ID_ANY, "Настройки\tCtrl+,", "Открыть настройки")
+        settings_item = file_menu.Append(wx.ID_ANY, _("ui.settings") + "\tCtrl+,", _("ui.open_settings"))
         self.Bind(wx.EVT_MENU, self._on_settings, settings_item)
         file_menu.AppendSeparator()
-        exit_item = file_menu.Append(wx.ID_EXIT, "Выход\tCtrl+Q", "Выход из приложения")
+        exit_item = file_menu.Append(wx.ID_EXIT, _("ui.exit") + "\tCtrl+Q", _("ui.exit_app"))
         self.Bind(wx.EVT_MENU, self._on_exit, exit_item)
-        menubar.Append(file_menu, "Файл")
+        menubar.Append(file_menu, _("ui.file"))
         self.SetMenuBar(menubar)
 
     def _create_game_selector_panel(self):
@@ -88,26 +89,36 @@ class MainWindow(wx.Frame):
         self.game_choice.Bind(wx.EVT_CHOICE, self._on_game_selected)
         sizer.Add(self.game_choice, 1, wx.EXPAND | wx.ALL, 5)
 
-        add_game_btn = wx.Button(self.game_selector_panel, label="Добавить игру")
+        add_game_btn = wx.Button(self.game_selector_panel, label=_("ui.add_game"))
         add_game_btn.Bind(wx.EVT_BUTTON, self._on_add_game)
         sizer.Add(add_game_btn, 0, wx.ALL, 5)
 
         # --- НОВЫЕ КНОПКИ ---
-        self.edit_game_btn = wx.Button(self.game_selector_panel, label="Редактировать")
+        self.edit_game_btn = wx.Button(self.game_selector_panel, label=_("ui.edit_game"))
         self.edit_game_btn.Bind(wx.EVT_BUTTON, self._on_edit_game)
         self.edit_game_btn.Enable(False) # Отключена, если игра не выбрана
         sizer.Add(self.edit_game_btn, 0, wx.ALL, 5)
 
-        self.remove_game_btn = wx.Button(self.game_selector_panel, label="Удалить")
+        self.remove_game_btn = wx.Button(self.game_selector_panel, label=_("ui.remove_game"))
         self.remove_game_btn.Bind(wx.EVT_BUTTON, self._on_remove_game)
         self.remove_game_btn.Enable(False) # Отключена, если игра не выбрана
         sizer.Add(self.remove_game_btn, 0, wx.ALL, 5)
         # ---------------------
 
-        self.launch_game_btn = wx.Button(self.game_selector_panel, label="Запустить игру")
+        self.launch_game_btn = wx.Button(self.game_selector_panel, label=_("ui.launch_game"))
         self.launch_game_btn.Bind(wx.EVT_BUTTON, self._on_launch_game)
         self.launch_game_btn.Enable(False)
         sizer.Add(self.launch_game_btn, 0, wx.ALL, 5)
+
+        # --- Добавляем кнопки настроек и выхода ---
+        self.settings_btn = wx.Button(self.game_selector_panel, label=_("ui.settings"))
+        self.settings_btn.Bind(wx.EVT_BUTTON, self._on_settings)
+        sizer.Add(self.settings_btn, 0, wx.ALL, 5)
+
+        self.exit_btn = wx.Button(self.game_selector_panel, label=_("ui.exit"))
+        self.exit_btn.Bind(wx.EVT_BUTTON, self._on_exit)
+        sizer.Add(self.exit_btn, 0, wx.ALL, 5)
+        # -----------------------------------------
 
         self.game_selector_panel.SetSizer(sizer)
         self._update_game_list()
@@ -125,13 +136,13 @@ class MainWindow(wx.Frame):
             self.task_manager
         )
         # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
-        self.notebook.AddPage(self.mods_tab, "Моды")
+        self.notebook.AddPage(self.mods_tab, _("ui.mods"))
         # --- ИСПРАВЛЕНИЕ: Передаем mod_manager в BrowserTab ---
         self.browser_tab = BrowserTab(self.notebook, self.download_manager, self.language_manager, self.mod_manager)
         # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
-        self.notebook.AddPage(self.browser_tab, "Браузер")
+        self.notebook.AddPage(self.browser_tab, _("ui.browser"))
         self.logs_tab = LogsTab(self.notebook, self.language_manager)
-        self.notebook.AddPage(self.logs_tab, "Логи")
+        self.notebook.AddPage(self.logs_tab, _("ui.logs"))
         main_sizer.Add(self.notebook, 1, wx.EXPAND)
         self.SetSizer(main_sizer)
 
@@ -141,11 +152,13 @@ class MainWindow(wx.Frame):
         # --- Подписка на новое событие ---
         event_bus.subscribe("game_updated", self._on_game_list_changed)
         # ---------------------------------
-        event_bus.subscribe("game_started", self._on_game_status_changed)
-        event_bus.subscribe("game_stopped", self._on_game_status_changed)
-        event_bus.subscribe("language_changed", self._on_language_changed)
+        event_bus.subscribe("game_started", self._on_game_status_callback)
+        event_bus.subscribe("game_stopped", self._on_game_status_callback)
         event_bus.subscribe("open_mod_in_browser", self._on_open_mod_in_browser)
         event_bus.subscribe("mods_updated", self._on_mods_updated)
+        
+        # Подписка на событие смены языка
+        event_bus.subscribe("language_changed", self._on_language_changed)
         
         # Запускаем мониторинг статуса игр
         self.status_monitor.add_status_callback(self._on_game_status_callback)
@@ -193,11 +206,11 @@ class MainWindow(wx.Frame):
                     # Сбросим статус игры, если процесс не запущен
                     self.current_game.is_running = False
                     self.game_manager.update_game(self.current_game.steam_id, self.current_game.to_dict())
-                    self.launch_game_btn.SetLabel("Запустить игру")
-                    self.SetStatusText("Готов")
+                    self.launch_game_btn.SetLabel(_("ui.launch_game"))
+                    self.SetStatusText(_("ui.ready"))
             else:
-                self.launch_game_btn.SetLabel("Запустить игру")
-                self.SetStatusText("Готов")
+                self.launch_game_btn.SetLabel(_("ui.launch_game"))
+                self.SetStatusText(_("ui.ready"))
 
             # --- Включаем кнопки редактирования и удаления ---
             self.edit_game_btn.Enable(True)
@@ -211,8 +224,8 @@ class MainWindow(wx.Frame):
         else:
             self.current_game = None
             self.launch_game_btn.Enable(False)
-            self.launch_game_btn.SetLabel("Запустить игру")
-            self.SetStatusText("Готов")
+            self.launch_game_btn.SetLabel(_("ui.launch_game"))
+            self.SetStatusText(_("ui.ready"))
             # --- Отключаем кнопки редактирования и удаления ---
             self.edit_game_btn.Enable(False)
             self.remove_game_btn.Enable(False)
@@ -300,7 +313,7 @@ class MainWindow(wx.Frame):
                 if success:
                     self.current_game.is_running = False
                     self.game_manager.update_game(self.current_game.steam_id, self.current_game.to_dict())
-                    self.launch_game_btn.SetLabel("Запустить игру")
+                    self.launch_game_btn.SetLabel(_("ui.launch_game"))
                     self.SetStatusText("Игра остановлена")
                     logger.info(f"Игра '{self.current_game.name}' остановлена")
                 else:
@@ -384,8 +397,8 @@ class MainWindow(wx.Frame):
             if self.current_game:
                 self.current_game.is_running = False
                 self.game_manager.update_game(self.current_game.steam_id, self.current_game.to_dict())
-                self.launch_game_btn.SetLabel("Запустить игру")
-                self.SetStatusText("Готов")
+                self.launch_game_btn.SetLabel(_("ui.launch_game"))
+                self.SetStatusText(_("ui.ready"))
                 logger.info(f"Игра '{self.current_game.name}' завершилась")
 
                 # Очищаем ссылку на процесс
@@ -488,6 +501,54 @@ class MainWindow(wx.Frame):
         logger.debug("[MainWindow] Диалог настроек закрыт.")
 
     # ---------------------------------------------
+
+    def _on_language_changed(self, new_language):
+        """Обработчик смены языка"""
+        logger.info(f"[MainWindow] Language changed to: {new_language}")
+        
+        # Обновляем все тексты UI
+        self._update_ui_texts()
+        
+        # Обновляем тексты во всех вкладках
+        if hasattr(self, 'mods_tab') and hasattr(self.mods_tab, '_update_ui_texts'):
+            self.mods_tab._update_ui_texts()
+        
+        if hasattr(self, 'browser_tab') and hasattr(self.browser_tab, '_update_ui_texts'):
+            self.browser_tab._update_ui_texts()
+            
+        if hasattr(self, 'logs_tab') and hasattr(self.logs_tab, '_update_ui_texts'):
+            self.logs_tab._update_ui_texts()
+
+    def _update_ui_texts(self):
+        """Обновляет все тексты в UI"""
+        # Обновляем статус бар
+        self.SetStatusText(_("ui.ready"))
+        
+        # Обновляем кнопки
+        if hasattr(self, 'settings_btn'):
+            self.settings_btn.SetLabel(_("ui.settings"))
+        if hasattr(self, 'exit_btn'):
+            self.exit_btn.SetLabel(_("ui.exit"))
+        if hasattr(self, 'add_game_btn'):
+            self.add_game_btn.SetLabel(_("ui.add_game"))
+        if hasattr(self, 'edit_game_btn'):
+            self.edit_game_btn.SetLabel(_("ui.edit_game"))
+        if hasattr(self, 'remove_game_btn'):
+            self.remove_game_btn.SetLabel(_("ui.remove_game"))
+        if hasattr(self, 'launch_game_btn'):
+            self.launch_game_btn.SetLabel(_("ui.launch_game"))
+            
+        # Обновляем вкладки
+        if hasattr(self, 'notebook'):
+            for i in range(self.notebook.GetPageCount()):
+                page_text = ""
+                if i == 0:
+                    page_text = _("ui.mods")
+                elif i == 1:
+                    page_text = _("ui.browser")
+                elif i == 2:
+                    page_text = _("ui.logs")
+                self.notebook.SetPageText(i, page_text)
 
     def _on_exit(self, event):
         self.Close()
