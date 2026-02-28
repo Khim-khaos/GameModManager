@@ -89,7 +89,11 @@
     "mods_up_to_date": "Up to date",
     "mods_no_data": "No data",
     "update_check_results": "Update check results",
-    "ready": "Ready"
+    "ready": "Ready",
+    "export": "Export",
+    "no_enabled_mods_to_export": "No enabled mods to export",
+    "save_mod_list": "Save mod list",
+    "export_success": "Mod list exported to:"
   },
   "browser": {
     "download_queue": "Download Queue",
@@ -172,6 +176,7 @@
     "names_loading_aborted": "Names loading aborted by user (inside loop)",
     "all_mods_in_cache": "All {total} mods already in cache",
     "loading_mod_name": "Loading mod name {mod_id}",
+    "information": "Information",
     "mod_data_failed": "Failed to get data",
     "network_error": "Network error",
     "loading_error": "Error",

@@ -89,7 +89,11 @@
     "mods_up_to_date": "Актуальны",
     "mods_no_data": "Нет данных",
     "update_check_results": "Результаты проверки обновлений",
-    "ready": "Готово"
+    "ready": "Готово",
+    "export": "Экспорт",
+    "no_enabled_mods_to_export": "Нет включённых модов для экспорта",
+    "save_mod_list": "Сохранить список модов",
+    "export_success": "Список модов экспортирован в:"
   },
   "browser": {
     "download_queue": "Очередь загрузки",
@@ -172,6 +176,7 @@
     "names_loading_aborted": "Загрузка названий прервана пользователем (внутри цикла)",
     "all_mods_in_cache": "Все {total} модов уже в кэше",
     "loading_mod_name": "Загрузка названия мода {mod_id}",
+    "information": "Информация",
     "mod_data_failed": "Не удалось получить данные",
     "network_error": "Ошибка сети",
     "loading_error": "Ошибка",

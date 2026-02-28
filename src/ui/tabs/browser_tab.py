@@ -79,11 +79,8 @@ class BrowserTab(wx.Panel):
         self.queue_list.AppendColumn(_("mod.name"), width=200)
         self.queue_list.AppendColumn(_("mod.id"), width=150)
         queue_sizer.Add(self.queue_list, 1, wx.ALL | wx.EXPAND, 5)
-        # --- Добавляем кнопки экспорта/импорта и очистки ---
+        # --- Добавляем кнопки импорта и очистки ---
         top_row_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.export_btn = wx.Button(self.queue_panel, label=_("browser.export"))
-        self.export_btn.Bind(wx.EVT_BUTTON, self._on_export)
-        top_row_sizer.Add(self.export_btn, 0, wx.ALL, 5)
         self.import_btn = wx.Button(self.queue_panel, label=_("browser.import"))
         self.import_btn.Bind(wx.EVT_BUTTON, self._on_import)
         top_row_sizer.Add(self.import_btn, 0, wx.ALL, 5)
@@ -135,8 +132,6 @@ class BrowserTab(wx.Panel):
             self.queue_title.SetLabel(_("browser.download_queue_title", count=len(queue)))
         
         # Обновляем кнопки очереди
-        if hasattr(self, 'export_btn'):
-            self.export_btn.SetLabel(_("browser.export"))
         if hasattr(self, 'import_btn'):
             self.import_btn.SetLabel(_("browser.import"))
         if hasattr(self, 'clear_queue_btn'):
@@ -1026,7 +1021,7 @@ class BrowserTab(wx.Panel):
                     wx.CallAfter(self._collection_error, "Не удалось получить список модов из коллекции (пустой список)")
             else:
                 logger.error(f"[Browser/Collection] Ошибка загрузки коллекции {collection_id}, статус: {response.status_code}")
-                wx.CallAfter(self._collection_error, f"Ошибка загрузки коллекции (HTTP {response.status_code})")
+                wx.CallAfter(self._collection_error, f"Ошибка за��рузки коллекции (HTTP {response.status_code})")
         except requests.exceptions.RequestException as e:
             logger.error(f"[Browser/Collection] Сетевая ошибка при парсинге коллекции {collection_id}: {e}")
             wx.CallAfter(self._collection_error, f"Сетевая ошибка: {e}")
@@ -1049,46 +1044,7 @@ class BrowserTab(wx.Panel):
         self.Layout()
         wx.MessageBox(message, "Ошибка", wx.OK | wx.ICON_ERROR)
 
-    # --- НОВЫЕ МЕТОДЫ для экспорта/импорта ---
-    def _on_export(self, event):
-        """Экспортирует список установленных модов."""
-        if not self.current_game:
-            wx.MessageBox("Сначала выберите игру", "Ошибка", wx.OK | wx.ICON_WARNING)
-            return
-        if not self.installed_mod_ids:
-            wx.MessageBox("Нет установленных модов для экспорта", "Информация", wx.OK | wx.ICON_INFORMATION)
-            return
-        with wx.FileDialog(self, "Сохранить список модов",
-                           wildcard="JSON files (*.json)|*.json",
-                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
-            if fileDialog.ShowModal() == wx.ID_CANCEL:
-                return
-            pathname = fileDialog.GetPath()
-            try:
-                # Получаем полные объекты модов для экспорта названий
-                mod_list = []
-                if self.mod_manager:
-                    for mod in self.mod_manager._mods: # Или get_all_mods
-                        if mod.mod_id in self.installed_mod_ids:
-                            mod_list.append({
-                                'mod_id': mod.mod_id,
-                                'name': mod.name,
-                                'author': mod.author
-                            })
-                data_to_export = {
-                    'game_steam_id': self.current_game.steam_id,
-                    'game_name': self.current_game.name,
-                    'exported_at': wx.DateTime.Now().FormatISOCombined(),
-                    'mods': mod_list
-                }
-                with open(pathname, 'w', encoding='utf-8') as f:
-                    json.dump(data_to_export, f, indent=4, ensure_ascii=False)
-                wx.MessageBox(f"Список модов экспортирован в:\n{pathname}", "Экспорт", wx.OK | wx.ICON_INFORMATION)
-                logger.info(f"[Browser/Export] Список модов экспортирован в {pathname}")
-            except Exception as e:
-                logger.error(f"[Browser/Export] Ошибка экспорта: {e}")
-                wx.MessageBox(f"Ошибка при экспорте: {e}", "Ошибка", wx.OK | wx.ICON_ERROR)
-
+    # --- НОВЫЕ МЕТОДЫ для импорта ---
     def _on_import(self, event):
         """Импортирует список модов из файла."""
         if not self.current_game:

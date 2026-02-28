@@ -115,14 +115,17 @@ class ModsTab(wx.Panel):
         # Добавляем панель с кнопками управления модами наверх
         control_panel = wx.Panel(self)
         control_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
+
         self.check_updates_btn = wx.Button(control_panel, label=self.language_manager.get_text("mod.check_updates"))
         self.update_all_btn = wx.Button(control_panel, label=self.language_manager.get_text("mod.update_all"))
+        self.export_btn = wx.Button(control_panel, label=self.language_manager.get_text("mod.export"))
         self.check_updates_btn.Bind(wx.EVT_BUTTON, self._on_check_updates)
         self.update_all_btn.Bind(wx.EVT_BUTTON, self._on_update_all_mods)
-        
+        self.export_btn.Bind(wx.EVT_BUTTON, self._on_export)
+
         control_sizer.Add(self.check_updates_btn, 0, wx.RIGHT | wx.TOP | wx.BOTTOM, 5)
         control_sizer.Add(self.update_all_btn, 0, wx.RIGHT | wx.TOP | wx.BOTTOM, 5)
+        control_sizer.Add(self.export_btn, 0, wx.RIGHT | wx.TOP | wx.BOTTOM, 5)
         control_sizer.AddStretchSpacer(1)  # Растягиваемый spacer для прижатия к левому краю
         
         control_panel.SetSizer(control_sizer)
@@ -1535,6 +1538,59 @@ class ModsTab(wx.Panel):
         finally:
             self.names_dialog = None
 
+    def _on_export(self, event):
+        """Экспортирует список включённых модов в JSON файл."""
+        if not self.current_game:
+            wx.MessageBox(self.language_manager.get_text("system.select_game_first"), 
+                         self.language_manager.get_text("system.error"), 
+                         wx.OK | wx.ICON_WARNING)
+            return
+        
+        # Получаем включённые моды из mod_manager
+        enabled_mods = self.mod_manager.get_enabled_mods(self.current_game.steam_id)
+        
+        if not enabled_mods:
+            wx.MessageBox(self.language_manager.get_text("mod.no_enabled_mods_to_export"), 
+                         self.language_manager.get_text("system.information"), 
+                         wx.OK | wx.ICON_INFORMATION)
+            return
+        
+        with wx.FileDialog(self, self.language_manager.get_text("mod.save_mod_list"),
+                           wildcard="JSON files (*.json)|*.json",
+                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
+            if fileDialog.ShowModal() == wx.ID_CANCEL:
+                return
+            pathname = fileDialog.GetPath()
+            try:
+                # Формируем данные для экспорта
+                mod_list = []
+                for mod in enabled_mods:
+                    mod_list.append({
+                        'mod_id': mod.mod_id,
+                        'name': mod.name,
+                        'author': mod.author
+                    })
+                
+                data_to_export = {
+                    'game_steam_id': self.current_game.steam_id,
+                    'game_name': self.current_game.name,
+                    'exported_at': wx.DateTime.Now().FormatISOCombined(),
+                    'mods': mod_list
+                }
+                
+                with open(pathname, 'w', encoding='utf-8') as f:
+                    json.dump(data_to_export, f, indent=4, ensure_ascii=False)
+                
+                wx.MessageBox(f"{self.language_manager.get_text('mod.export_success')}\n{pathname}", 
+                             self.language_manager.get_text("mod.export"), 
+                             wx.OK | wx.ICON_INFORMATION)
+                logger.info(f"[ModsTab/Export] Список модов экспортирован в {pathname}")
+            except Exception as e:
+                logger.error(f"[ModsTab/Export] Ошибка экспорта: {e}")
+                wx.MessageBox(f"{self.language_manager.get_text('system.error')}: {e}", 
+                             self.language_manager.get_text("system.error"), 
+                             wx.OK | wx.ICON_ERROR)
+
     def _on_language_changed(self, lang_code: str):
         """Обработчик изменения языка"""
         logger.info(f"[ModsTab] Язык изменен на: {lang_code}")
@@ -1549,7 +1605,9 @@ class ModsTab(wx.Panel):
                 self.check_updates_btn.SetLabel(self.language_manager.get_text("mod.check_updates"))
             if hasattr(self, 'update_all_btn'):
                 self.update_all_btn.SetLabel(self.language_manager.get_text("mod.update_all"))
-            
+            if hasattr(self, 'export_btn'):
+                self.export_btn.SetLabel(self.language_manager.get_text("mod.export"))
+
             # Обновляем заголовки панелей
             if hasattr(self, 'disabled_title'):
                 disabled_count = self.disabled_list.GetItemCount() if self.disabled_list else 0

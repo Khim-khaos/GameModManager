@@ -476,8 +476,8 @@ class MainWindow(wx.Frame):
     def _on_game_status_changed(self, steam_id):
         """Обработчик изменения статуса игры через события"""
         wx.CallAfter(self._update_game_status_ui)
-    
-    def _on_game_status_callback(self, steam_id: str, is_running: bool):
+
+    def _on_game_status_callback(self, steam_id: str):
         """Callback от мониторинга статуса"""
         wx.CallAfter(self._update_game_status_ui)
     
