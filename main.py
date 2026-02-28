@@ -8,25 +8,28 @@ from src.core.task_manager import task_manager
 # Добавляем src в путь для импортов
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-# Создаем директорию данных при запуске EXE
+# Создаем директорию данных
 def ensure_data_directory():
     """Создает директорию данных для настроек и игр"""
     if getattr(sys, 'frozen', False):
         # Запущено как EXE файл
         base_dir = os.path.dirname(sys.executable)
         data_dir = os.path.join(base_dir, 'data')
+        logs_dir = os.path.join(base_dir, 'src', 'Logs')
+        
+        # ВСЕГДА создаем необходимые папки
+        os.makedirs(data_dir, exist_ok=True)
+        if not getattr(sys, 'frozen', False):
+            # Для разработки создаем и папку Logs
+            os.makedirs(logs_dir, exist_ok=True)
     else:
         # Запущено как скрипт
         base_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(base_dir, 'src', 'data')
-    
-    os.makedirs(data_dir, exist_ok=True)
-    
-    # Также создаем директорию для логов
-    logs_dir = os.path.join(os.path.dirname(data_dir), 'src', 'Logs')
-    if not getattr(sys, 'frozen', False):
-        os.makedirs(logs_dir, exist_ok=True)
-    
+        logs_dir = os.path.join(base_dir, 'src', 'Logs')
+        os.makedirs(data_dir, exist_ok=True)
+        
+    print(f"[DEBUG] Data directory created: {data_dir}")
     return data_dir
 
 from src.ui.main_window import MainWindow
@@ -43,7 +46,7 @@ class GameModManagerApp(wx.App):
         # Настраиваем логирование
         setup_logger()
 
-        # Инициализируем менеджеры (можно использовать для ранней загрузки языков/настроек)
+        # Инициализируем менеджеры
         self.settings_manager = SettingsManager()
         self.language_manager = LanguageManager()
         

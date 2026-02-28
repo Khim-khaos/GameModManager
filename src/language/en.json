@@ -13,6 +13,12 @@
     "settings": "Settings",
     "exit": "Exit"
   },
+  "logs": {
+    "file": "Log file",
+    "clear": "Clear log",
+    "auto_refresh": "Auto refresh",
+    "no_logs": "No logs"
+  },
   "tabs": {
     "mods": "Mods",
     "browser": "Browser",
@@ -67,6 +73,8 @@
     "confirm_remove_text": "Are you sure you want to remove mod?",
     "yes": "Yes",
     "no": "No",
+    "check_updates": "Check Updates",
+    "mod_display_name": "Mod ({mod_id})",
     "open_mod_page": "Open mod page",
     "enable_mod": "Enable mod",
     "disable_mod": "Disable mod",

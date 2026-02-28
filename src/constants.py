@@ -13,12 +13,14 @@ APP_AUTHOR = "Khim_Khaosow"
 
 # Определяем базовые пути в зависимости от режима запуска
 if getattr(sys, 'frozen', False):
-    # Запущено как EXE файл
+    # Запущено как EXE файл - PyInstaller копирует файлы в _MEIPASS
     BASE_DIR = os.path.dirname(sys.executable)
     SRC_DIR = os.path.join(BASE_DIR, 'src')
     DATA_DIR = os.path.join(BASE_DIR, 'data')
     LOGS_DIR = os.path.join(BASE_DIR, 'Logs')
-    LANGUAGE_DIR = os.path.join(BASE_DIR, 'language')
+    # Языковые файлы копируются в _MEIPASS/language
+    _MEIPASS = getattr(sys, '_MEIPASS', BASE_DIR)
+    LANGUAGE_DIR = os.path.join(_MEIPASS, 'language')
     ASSETS_DIR = os.path.join(BASE_DIR, 'assets')
 else:
     # Запущено как скрипт

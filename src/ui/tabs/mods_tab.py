@@ -13,6 +13,8 @@ from loguru import logger
 from typing import List, Dict, Optional, Any, Set
 import requests
 from io import BytesIO
+# Импорт функции перевода
+from src.core.i18n import _
 # Импорт моделей
 from src.models.mod import Mod
 from src.models.game import Game
@@ -30,7 +32,6 @@ from src.core.steam_workshop_service import SteamWorkshopService
 from src.core.task_manager import TaskManager
 # Импортируем HyperLinkCtrl для кликабельных ссылок
 import wx.lib.agw.hyperlink as hl
-from src.core.i18n import _
 
 class ModsTab(wx.Panel):
     """Вкладка установленных модов с вертикальным расположением панелей."""
@@ -259,6 +260,13 @@ class ModsTab(wx.Panel):
         self._clear_mod_info()
         self._clear_lists()
         self._update_panel_titles(0, 0)
+        
+        # Добавляем отладку для проверки пути
+        if game:
+            logger.debug(f"[ModsTab] Game path: {game.mods_path}")
+            logger.debug(f"[ModsTab] Path exists: {Path(game.mods_path).exists()}")
+            logger.debug(f"[ModsTab] Path isdir: {Path(game.mods_path).is_dir()}")
+        
         if not game or not Path(game.mods_path).exists():
             if game and not Path(game.mods_path).exists():
                 logger.warning("[ModsTab] " + _("system.mods_folder_not_exists", path=game.mods_path))
@@ -271,8 +279,13 @@ class ModsTab(wx.Panel):
                 logger.error("[ModsTab/LoadAsync] " + _("system.current_game_not_set"))
                 wx.CallAfter(wx.MessageBox, f"{self.language_manager.get_text('mod.error')}: {self.language_manager.get_text('mod.game_not_selected')}", self.language_manager.get_text("mod.error"), wx.OK | wx.ICON_ERROR)
                 return
+            
             logger.debug("[ModsTab/LoadAsync] " + _("system.loading_mods_for_game", name=self.current_game.name, id=self.current_game.steam_id))
-            _ = self.mod_manager.load_mods_for_game(self.current_game)
+            logger.debug(f"[ModsTab/LoadAsync] Game mods path: {self.current_game.mods_path}")
+            logger.debug(f"[ModsTab/LoadAsync] Path exists: {Path(self.current_game.mods_path).exists()}")
+            logger.debug(f"[ModsTab/LoadAsync] Path isdir: {Path(self.current_game.mods_path).is_dir()}")
+            
+            self.mod_manager.load_mods_for_game(self.current_game)
             enabled_mods = self.mod_manager.get_enabled_mods(steam_id)
             disabled_mods = self.mod_manager.get_disabled_mods(steam_id)
             wx.CallAfter(self._on_mods_loaded, enabled_mods, disabled_mods)
@@ -392,7 +405,7 @@ class ModsTab(wx.Panel):
                     wx.CallAfter(self._refresh_single_mod_in_lists, mod.mod_id)
                 else:
                     logger.warning("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_data_fetch_failed_log"))
-                    details = {'title': mod.mod_id, 'author': 'Ошибка', 'description': 'Ошибка загрузки', 'tags': [], 'dependencies': []}
+                    details = {'title': mod.mod_id, 'author': _("mod.mod_network_error_log"), 'description': 'Ошибка загрузки', 'tags': [], 'dependencies': []}
             except requests.RequestException as e:
                 logger.warning("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_network_error_log") + f": {e}")
                 details = {'title': mod.mod_id, 'author': _("mod.mod_network_error_log"), 'description': str(e), 'tags': [], 'dependencies': []}

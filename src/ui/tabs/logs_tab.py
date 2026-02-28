@@ -8,6 +8,7 @@ import threading
 import time
 from loguru import logger
 from src.constants import LOGS_DIR
+from src.core.i18n import _
 
 class LogsTab(wx.Panel):
     """Вкладка просмотра логов"""
@@ -19,16 +20,47 @@ class LogsTab(wx.Panel):
         self.log_watcher = None
         self._create_ui()
         self._update_file_list()
+        
+        # Подписка на событие смены языка
+        if hasattr(self.language_manager, '_event_bus'):
+            self.language_manager._event_bus.subscribe("language_changed", self._on_language_changed)
+    
+    def _on_language_changed(self, lang_code: str):
+        """Обработчик смены языка"""
+        logger.info(f"[LogsTab] Language changed to: {lang_code}")
+        self._update_ui_texts()
+    
+    def _update_ui_texts(self):
+        """Обновляет все тексты в UI"""
+        try:
+            # Обновляем кнопку очистки
+            if hasattr(self, 'clear_btn'):
+                self.clear_btn.SetLabel(_("logs.clear"))
+            
+            # Обновляем кнопку обновления
+            if hasattr(self, 'refresh_btn'):
+                self.refresh_btn.SetLabel(_("ui.refresh"))
+            
+            # Обновляем метку файла
+            if hasattr(self, 'file_label'):
+                self.file_label.SetLabel(_("logs.file") + ":")
+                
+            # Обновляем чекбокс
+            if hasattr(self, 'auto_refresh_cb'):
+                self.auto_refresh_cb.SetLabel(_("logs.auto_refresh"))
+                
+        except Exception as e:
+            logger.error(f"[LogsTab] Error updating UI texts: {e}")
 
     def _create_ui(self):
         main_sizer = wx.BoxSizer(wx.VERTICAL)
 
         # Выбор файла лога
         file_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        file_label = wx.StaticText(self, label="Файл лога:")
+        file_label = wx.StaticText(self, label=_("logs.file") + ":")
         self.file_choice = wx.Choice(self)
         self.file_choice.Bind(wx.EVT_CHOICE, self._on_file_selected)
-        self.refresh_btn = wx.Button(self, label="Обновить")
+        self.refresh_btn = wx.Button(self, label=_("ui.refresh"))
         self.refresh_btn.Bind(wx.EVT_BUTTON, self._on_refresh)
         file_sizer.Add(file_label, 0, wx.ALL | wx.CENTER, 5)
         file_sizer.Add(self.file_choice, 1, wx.ALL | wx.EXPAND, 5)
@@ -45,10 +77,10 @@ class LogsTab(wx.Panel):
 
         # Кнопки управления
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.clear_btn = wx.Button(self, label="Очистить лог")
+        self.clear_btn = wx.Button(self, label=_("logs.clear"))
         self.clear_btn.Bind(wx.EVT_BUTTON, self._on_clear)
         button_sizer.Add(self.clear_btn, 0, wx.ALL, 5)
-        self.auto_refresh_cb = wx.CheckBox(self, label="Автообновление")
+        self.auto_refresh_cb = wx.CheckBox(self, label=_("logs.auto_refresh"))
         self.auto_refresh_cb.SetValue(True)
         self.auto_refresh_cb.Bind(wx.EVT_CHECKBOX, self._on_auto_refresh)
         button_sizer.Add(self.auto_refresh_cb, 0, wx.ALL | wx.CENTER, 5)
