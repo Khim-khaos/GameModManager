@@ -1075,8 +1075,10 @@ class BrowserTab(wx.Panel):
                     skipped_count = 0
                     for mod_data in imported_mods:
                         mod_id = str(mod_data.get('mod_id', ''))
-                        if not mod_id.isdigit():
-                            logger.warning(f"[Browser/Import] Пропущен мод с некорректным ID: {mod_data}")
+                        # Проверка: ID не должен быть пустым, но может быть нечисловым (для кастомных модов)
+                        if not mod_id or not mod_id.strip():
+                            logger.warning(f"[Browser/Import] Пропущен мод с пустым ID: {mod_data}")
+                            skipped_count += 1
                             continue
                         # Проверка на наличие в очереди
                         if any(m.mod_id == mod_id for m in self.download_manager.download_queue):

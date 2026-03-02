@@ -1,11 +1,14 @@
+# src/core/mod_manager.py
 # -*- coding: utf-8 -*-
 """
 Менеджер модов
 """
 import os
+import re
 import shutil
+import xml.etree.ElementTree as ET
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from loguru import logger
 from src.models.mod import Mod
 from src.models.game import Game
@@ -114,29 +117,90 @@ class ModManager:
             logger.debug(f"[ModManager/load_mods_for_game] Список загруженных модов: {[m.mod_id for m in mods]}")
         return self._mods.copy()
 
+    def _extract_steam_id_from_mod_folder(self, path: str) -> Optional[str]:
+        """
+        Извлекает Steam ID из файлов мода (About.xml для RimWorld).
+        :param path: Путь к папке мода.
+        :return: Steam ID или None.
+        """
+        # Пробуем найти About.xml (для RimWorld)
+        about_xml_path = os.path.join(path, "About", "About.xml")
+        if not os.path.exists(about_xml_path):
+            # Пробуем без папки About
+            about_xml_path = os.path.join(path, "About.xml")
+        
+        if os.path.exists(about_xml_path):
+            try:
+                tree = ET.parse(about_xml_path)
+                root = tree.getroot()
+                
+                # Ищем publishedFileId в разных возможных форматах
+                # RimWorld: <publishedFileId>123456789</publishedFileId>
+                for elem in root.iter():
+                    if elem.tag == 'publishedFileId' and elem.text:
+                        steam_id = elem.text.strip()
+                        if steam_id.isdigit():
+                            logger.debug(f"[ModManager/ExtractID] Найден Steam ID {steam_id} в {about_xml_path}")
+                            return steam_id
+                
+                logger.debug(f"[ModManager/ExtractID] publishedFileId не найден в {about_xml_path}")
+            except Exception as e:
+                logger.debug(f"[ModManager/ExtractID] Ошибка чтения {about_xml_path}: {e}")
+        
+        # Если не нашли About.xml, пробуем другие форматы
+        # Например, manifest.json для некоторых игр
+        manifest_path = os.path.join(path, "manifest.json")
+        if os.path.exists(manifest_path):
+            try:
+                import json
+                with open(manifest_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    # Пробуем разные возможные ключи
+                    for key in ['publishedFileId', 'steamId', 'workshopId', 'id']:
+                        if key in data:
+                            steam_id = str(data[key]).strip()
+                            if steam_id.isdigit():
+                                logger.debug(f"[ModManager/ExtractID] Найден Steam ID {steam_id} в {manifest_path}")
+                                return steam_id
+            except Exception as e:
+                logger.debug(f"[ModManager/ExtractID] Ошибка чтения {manifest_path}: {e}")
+        
+        return None
+
     def _create_mod(self, mod_id: str, path: str, is_enabled: bool) -> Optional[Mod]:
         """Создаёт объект Mod с датой установки"""
-        # Базовая валидация ID мода (должен быть числом)
-        if not mod_id.isdigit():
-            logger.warning(f"[ModManager/_create_mod] Пропущен мод с некорректным ID (не число): '{mod_id}' (Путь: {path})")
+        # Базовая валидация ID мода (не должен быть пустым)
+        if not mod_id or not mod_id.strip():
+            logger.warning(f"[ModManager/_create_mod] Пропущен мод с пустым ID (Путь: {path})")
             return None
+        
+        # Если ID не числовой, пробуем найти настоящий Steam ID в файлах мода
+        actual_mod_id = mod_id
+        if not mod_id.isdigit():
+            logger.info(f"[ModManager/_create_mod] Найден мод с нечисловым ID (возможно, кастомная папка): '{mod_id}' (Путь: {path})")
+            extracted_id = self._extract_steam_id_from_mod_folder(path)
+            if extracted_id:
+                actual_mod_id = extracted_id
+                logger.info(f"[ModManager/_create_mod] Использован Steam ID из файла: '{actual_mod_id}' вместо '{mod_id}'")
+            else:
+                logger.warning(f"[ModManager/_create_mod] Не удалось найти Steam ID для мода '{mod_id}', используем имя папки как ID")
 
         try:
             install_date = datetime.fromtimestamp(os.path.getctime(path))
             # Добавляем локальную дату обновления (время последнего изменения папки)
             local_update_date = datetime.fromtimestamp(os.path.getmtime(path))
         except (OSError, ValueError, OverflowError) as e: # Расширяем обработку ошибок
-            logger.warning(f"[ModManager/_create_mod] Не удалось получить дату создания для папки '{path}' (ID: {mod_id}): {e}. Установлена None.")
+            logger.warning(f"[ModManager/_create_mod] Не удалось получить дату создания для папки '{path}' (ID: {actual_mod_id}): {e}. Установлена None.")
             install_date = None
             local_update_date = None
 
         mod = Mod(
-            mod_id=mod_id,
-            name=mod_id, # Имя может быть обновлено позже через Steam API
+            mod_id=actual_mod_id,
+            name=mod_id, # Имя папки как начальное имя (будет обновлено через Steam API)
             author="Неизвестен", # Автор может быть обновлён позже через Steam API
             local_path=path,
             is_enabled=is_enabled,
-            workshop_url=f"https://steamcommunity.com/sharedfiles/filedetails/?id={mod_id}",
+            workshop_url=f"https://steamcommunity.com/sharedfiles/filedetails/?id={actual_mod_id}" if actual_mod_id.isdigit() else "",
             install_date=install_date,
             local_update_date=local_update_date
         )

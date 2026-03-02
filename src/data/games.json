@@ -12,5 +12,12 @@
         "executable_path": "D:\\games\\Space Engineers\\Bin64\\SpaceEngineers.exe",
         "mods_path": "D:\\games\\Space Engineers\\Bin64\\FreeTP\\Workshop",
         "is_running": false
+    },
+    {
+        "name": "RimWorld",
+        "steam_id": "294100",
+        "executable_path": "D:\\games\\RimWorld_1.5.4243\\RimWorldWin64.exe",
+        "mods_path": "D:\\games\\RimWorld_1.5.4243\\Mods",
+        "is_running": false
     }
 ]

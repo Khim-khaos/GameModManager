@@ -22,11 +22,11 @@ class SteamWorkshopService:
         self.session = requests.Session()
         self.cache_manager = CacheManager()
         self.last_request_time = 0
-        self.min_request_interval = 2.0  # Минимум 2 секунды между запросами (увеличено для избежания 429)
-        self.max_retries = 3  # Максимальное количество повторных попыток
+        self.min_request_interval = 5.0  # Минимум 5 секунд между запросами (увеличено для избежания 429)
+        self.max_retries = 1  # Максимальное количество повторных попыток (уменьшено для скорости)
         # Можно добавить retries, адаптеры и т.д. при необходимости
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.3'
         })
 
     def _wait_for_rate_limit(self):

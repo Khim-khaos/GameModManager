@@ -341,30 +341,32 @@ class ModsTab(wx.Panel):
         self.names_total = len(mod_list)
         self.names_loaded = 0
         self.names_aborted = False
-        
+
         # Проверяем, какие моды уже есть в кэше
         mod_ids = [mod.mod_id for mod in mod_list]
         cached_mods = self.steam_workshop_service.get_cached_mods(mod_ids)
-        
+
         # Сразу обновляем интерфейс для модов из кэша
+        cached_count = 0
         for mod in mod_list:
             if mod.mod_id in cached_mods:
                 cached_data = cached_mods[mod.mod_id]
                 self.mod_details[mod.mod_id] = cached_data
                 # Обновляем название в списках
                 self._update_mod_name_in_lists(mod.mod_id, cached_data.get('title', mod.mod_id))
-                self.names_loaded += 1
-        
-        # Обновляем счетчик
+                cached_count += 1
+
+        # Обновляем счётчик один раз для всех кэшированных
+        self.names_loaded = cached_count
         current = self.names_loaded
         total = self.names_total
         mods_to_load = [mod for mod in mod_list if mod.mod_id not in cached_mods]
-        
+
         if mods_to_load:
             logger.info("[ModsTab/ListNames] " + _("mod.mods_to_load_count", count=len(mods_to_load), total=total))
             if self.names_total > 0:
                 wx.CallAfter(self._show_names_loading_dialog, self.names_total)
-            
+
             for mod in mods_to_load:
                 with self.loading_lock:
                     if self.names_aborted:
@@ -387,28 +389,26 @@ class ModsTab(wx.Panel):
                     return
             try:
                 if mod.mod_id in self.mod_details:
+                    # Мод уже обработан (например, из кэша), не увеличиваем счётчик
                     wx.CallAfter(self._refresh_single_mod_in_lists, mod.mod_id)
-                    with self.loading_lock:
-                        if self.names_aborted:
-                            return
-                        self.names_loaded += 1
-                        current = self.names_loaded
-                        total = self.names_total
-                    wx.CallAfter(self._update_names_loading_dialog, current, total, mod.mod_id)
                     return
-                
-                # Небольшая задержка между запросами для снижения нагрузки
-                time.sleep(0.5)
-                
-                details = self.steam_workshop_service.get_mod_details(mod.mod_id)
-                if details:
-                    details.setdefault('tags', [])
-                    details.setdefault('dependencies', [])
+
+                # Если ID не числовой, не делаем запрос к Steam - используем имя папки как название
+                if not mod.mod_id.isdigit():
+                    logger.debug(f"[ModsTab/ListName/Task] [{mod.mod_id}] Пропущен запрос к Steam (нечисловой ID)")
+                    details = {'title': mod.name if mod.name else mod.mod_id, 'author': mod.author if mod.author else 'Неизвестен', 'description': 'Мод с кастомной папкой', 'tags': [], 'dependencies': []}
                     self.mod_details[mod.mod_id] = details
                     wx.CallAfter(self._refresh_single_mod_in_lists, mod.mod_id)
                 else:
-                    logger.warning("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_data_fetch_failed_log"))
-                    details = {'title': mod.mod_id, 'author': _("mod.mod_network_error_log"), 'description': 'Ошибка загрузки', 'tags': [], 'dependencies': []}
+                    details = self.steam_workshop_service.get_mod_details(mod.mod_id)
+                    if details:
+                        details.setdefault('tags', [])
+                        details.setdefault('dependencies', [])
+                        self.mod_details[mod.mod_id] = details
+                        wx.CallAfter(self._refresh_single_mod_in_lists, mod.mod_id)
+                    else:
+                        logger.warning("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_data_fetch_failed_log"))
+                        details = {'title': mod.mod_id, 'author': _("mod.mod_network_error_log"), 'description': 'Ошибка загрузки', 'tags': [], 'dependencies': []}
             except requests.RequestException as e:
                 logger.warning("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_network_error_log") + f": {e}")
                 details = {'title': mod.mod_id, 'author': _("mod.mod_network_error_log"), 'description': str(e), 'tags': [], 'dependencies': []}
@@ -416,18 +416,16 @@ class ModsTab(wx.Panel):
                 logger.error("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_loading_error_log") + f": {e}")
                 details = {'title': mod.mod_id, 'author': _("mod.mod_loading_error_log"), 'description': str(e), 'tags': [], 'dependencies': []}
             finally:
+                # Увеличиваем счётчик только если не были прерваны
                 with self.loading_lock:
-                    if self.names_aborted:
-                        pass
-                    self.names_loaded += 1
-                    current = self.names_loaded
-                    total = self.names_total
-                    aborted = self.names_aborted
-                logger.info("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_processing_finished_log", current=current, total=total))
-                if not aborted:
-                    wx.CallAfter(self._update_names_loading_dialog, current, total, mod.mod_id)
-                else:
-                    wx.CallAfter(self._hide_names_loading_dialog)
+                    if not self.names_aborted:
+                        self.names_loaded += 1
+                        current = self.names_loaded
+                        total = self.names_total
+                        logger.info("[ModsTab/ListName/Task] [" + mod.mod_id + "] " + _("mod.mod_processing_finished_log", current=current, total=total))
+                        wx.CallAfter(self._update_names_loading_dialog, current, total, mod.mod_id)
+                    else:
+                        wx.CallAfter(self._hide_names_loading_dialog)
 
     def _refresh_single_mod_in_lists(self, mod_id: str):
         if not self: return
@@ -1088,7 +1086,7 @@ class ModsTab(wx.Panel):
                 self.mod_update_label.SetLabel(f"Обновлён: {update_info.get('updated_date', 'Неизвестно')}")
             if self.mod_size_label:
                 self.mod_size_label.SetLabel(f"Размер: {update_info.get('file_size', 'Неизвестно')}")
-            logger.debug(f"[ModsTab/Details/UI] [{mod_id}] Панель информации обновлена.")
+            logger.debug(f"[ModsTab/Details/UI] [{mod_id}] Панел�� информации обновлена.")
         except Exception as e:
             logger.error(f"[ModsTab/Details/UI] [{mod_id}] Ошибка обновления панели: {e}")
 
@@ -1510,10 +1508,11 @@ class ModsTab(wx.Panel):
         try:
             # Убеждаемся, что current не превышает total
             safe_current = max(0, min(current, total))
+            
             # Если total = 0, устанавливаем safe_current = 0
             if total <= 0:
                 safe_current = 0
-            
+
             # Обновляем диалог только если значение валидное
             if safe_current <= total:
                 keep_going, skip = self.names_dialog.Update(safe_current, f"Загружено {current} из {total}...")
@@ -1522,7 +1521,11 @@ class ModsTab(wx.Panel):
                     self.names_aborted = True
                     self._hide_names_loading_dialog()
         except RuntimeError:
+            # Игнорируем ошибки wxWidgets, связанные с прогрессом
             pass
+        except wx.PyAssertionError as e:
+            # Игнорируем ошибки C++ assertion из wxWidgets (например, invalid progress value)
+            logger.debug(f"[ModsTab/NamesDialog/Update] Игнорирована ошибка wxWidgets: {e}")
         except Exception as e:
             logger.error(f"[ModsTab/NamesDialog/Update] Ошибка обновления диалога: {e}")
 
